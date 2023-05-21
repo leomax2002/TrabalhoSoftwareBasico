@@ -17,7 +17,7 @@ STOP               ; espaços no fim
 
 SECTION DATA
 DOIS  :        CONST 2 ; tem que juntar ':' com o rótulo
-OLD_DATA:   SPACE
+OLD_DATA:SPACE
 NEW_DATA: 
 SPACE ; faz parte do label de cima
 TMP_DATA: 
