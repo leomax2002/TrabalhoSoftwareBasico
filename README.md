@@ -7,7 +7,7 @@ Repositório para o Primeiro Trabalho da Disciplina de Software Básico, o qual 
 Basta utilizar o seguinte comando no terminal:
 
 ```bash
-./montador <nome_do_arquivo>
+./montador nome_do_arquivo [mais arquivos]
 ```
 
 ## Implementação
