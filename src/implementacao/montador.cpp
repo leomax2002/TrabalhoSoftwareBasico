@@ -66,7 +66,8 @@ void assemble(string filename) {
     //Apenas um Alerta de Erro será mostrado
     int erros_ditos_Data = 1;
     int erros_ditos_Txt = 1;
-
+    //Mais de um Rotulo
+    int flag_mais_de_um_rotulo = 0;
     if (auxFile.is_open()) {
         while ( getline(auxFile, line)) {
             cont_linha++;
@@ -85,15 +86,20 @@ void assemble(string filename) {
                 int numWords = lineVec.size();
                 for(int i = 0; i < numWords; i++){
                     if(lineVec[i].back() == ':'){
+                        if(flag_mais_de_um_rotulo == 0){
                         printf("Erro Sintatico na linha %d, mais de um rotulo na mesma linha\n", cont_linha);
+                        }
+                        flag_mais_de_um_rotulo++;
                     }
                     else{
 
                         auxiliar.push_back(lineVec[i]);
                     }
                 }
+                if(flag_mais_de_um_rotulo > 0){
                 lineVec.clear();
                 copy(auxiliar.begin(), auxiliar.end(), back_inserter(lineVec));
+                }
                 //Verifica Erros Léxicos no Rótulo
                 analisador_lexico(label, cont_linha);
             }
