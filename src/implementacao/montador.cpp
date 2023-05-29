@@ -80,20 +80,25 @@ void assemble(string filename) {
                 string label = lineVec[0].substr(0, lineVec[0].size()-1);
                 tabSimb[label] = counter;
                 lineVec.erase(lineVec.begin());
+                vector<string> auxiliar;
                 //Incrementa flag_rot e verifica se há mais de um rótulo na linha
                 int numWords = lineVec.size();
                 for(int i = 0; i < numWords; i++){
                     if(lineVec[i].back() == ':'){
-                        printf("Erro Sintatico na linha %d, dois rotulos na mesma linha\n", cont_linha);
-                        break;
+                        printf("Erro Sintatico na linha %d, mais de um rotulo na mesma linha\n", cont_linha);
+                    }
+                    else{
+
+                        auxiliar.push_back(lineVec[i]);
                     }
                 }
+                lineVec.clear();
+                copy(auxiliar.begin(), auxiliar.end(), back_inserter(lineVec));
                 //Verifica Erros Léxicos no Rótulo
                 analisador_lexico(label, cont_linha);
             }
 
             string instruction = lineVec[0];
-            //cout << tabDiret[instruction] << endl;
 
             // verifica se é uma diretiva
             if (tabDiret[instruction] != 0) {
@@ -191,8 +196,17 @@ void assemble(string filename) {
     // arruma todas as pendências
     for(auto [lab, vec] : tabPend) {
         int flag_erro = 0;
+        int flag_idx = 0;
         for(auto idx : vec) {
-            mem[idx] = tabSimb[lab];
+            flag_idx++;
+            if(flag_idx == 1){
+                mem[idx] = tabSimb[lab];
+            }
+
+            if(flag_idx == 3){
+                flag_idx = 0;
+            }
+
             if(tabSimb[lab] == 0 && vec[2] == 0 && flag_erro == 0){
                 printf("Erro Semantico, dado nao definido na linha %d\n", vec[1]);
                 flag_erro = 1;
@@ -202,6 +216,7 @@ void assemble(string filename) {
                 flag_erro = 1;
             }
         }
+
     }
 
     // escrevendo no arquivo de saída
