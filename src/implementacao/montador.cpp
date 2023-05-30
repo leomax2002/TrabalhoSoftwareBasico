@@ -16,6 +16,10 @@ unordered_map<string, int> tabSimb;
 // Pendências da Tabela de Simbolos
 unordered_map<string, vector<int>> tabPend;
 
+//Tabela de Definições
+unordered_map<string, vector<int>> tabDef;
+//Tabela de Uso
+unordered_map<string, vector<int>> tabUso;
 static inline void trim(string &s) {
     s.erase(s.begin(), find_if(s.begin(), s.end(), [](unsigned char ch) {
         return !isspace(ch);
@@ -37,8 +41,6 @@ void analisador_lexico(string arg, int cont){
 void assemble(string filename) {
     fstream outFile, auxFile;
 
-    // arquivo de saída em binário
-    outFile.open(filename + ".exc", ios::out | ios::trunc);
 
     // arquivo intermediário contendo o texto preprocessado em .txt
     auxFile.open(filename + "_aux.txt", ios::in);
@@ -50,6 +52,7 @@ void assemble(string filename) {
     tabPend.clear();
 
     vector<int> mem;
+    vector<int> relativos;
     string line;
     int counter = 0;
     //Conta as linhas para exibir nas mensagens de erro
@@ -147,11 +150,16 @@ void assemble(string filename) {
                         flag_end = 0;
                 }
                 else if (instruction == "EXTERN") {
+                        string arg = lineVec[1];
+                        tabUso[arg] = vector<int>();
+                        tabSimb[arg] = -1;
                         flag_extern = 1;
                         if(flag_begin) printf("Erro Semantico na linha %d, sem BEGIN\n", cont_linha);
 
                 }
                 else if (instruction == "PUBLIC") {
+                        string arg = lineVec[1];
+                        tabDef[arg] = vector<int>();
                         flag_public = 1;
                         if(flag_begin) printf("Erro Semantico na linha %d, sem BEGIN\n", cont_linha);
 
@@ -180,6 +188,7 @@ void assemble(string filename) {
                     mem.push_back(-1);
                     if (!tabPend.count(arg)) tabPend[arg] = vector<int>();
                     tabPend[arg].push_back(counter);
+                    relativos.push_back(counter);
                     tabPend[arg].push_back(cont_linha);
                     if(instruction == "JMP" || instruction == "JMPZ" || instruction == "JMPP" || instruction == "JMPN"){
                         tabPend[arg].push_back(1);
@@ -207,6 +216,9 @@ void assemble(string filename) {
             flag_idx++;
             if(flag_idx == 1){
                 mem[idx] = tabSimb[lab];
+                if(tabDef.count(lab)){tabDef[lab].push_back(tabSimb[lab]);}
+
+                if(tabUso.count(lab)){tabUso[lab].push_back(idx);}
             }
 
             if(flag_idx == 3){
@@ -224,9 +236,34 @@ void assemble(string filename) {
         }
 
     }
-
+    // arquivo de saída em binário que não vai ser ligado
+     if(flag_extern || flag_public || !flag_begin || !flag_end){
+        outFile.open(filename + ".obj", ios::out | ios::trunc);
+     }
+     else{
+        outFile.open(filename + ".exc", ios::out | ios::trunc);
+     }
     // escrevendo no arquivo de saída
     string ans;
+    if(flag_extern || flag_public || !flag_begin || !flag_end){
+        ans+="USO\n";
+        for(auto [lab, vec] : tabUso){
+            for(auto aux : vec){
+                ans+= lab + " " + to_string(aux) + "\n";
+            }
+        }
+        ans+="DEF\n";
+        for(auto [lab, vec] : tabDef){
+            for(auto aux : vec){
+                ans+= lab + " " + to_string(aux) + "\n";
+            }
+        }
+        ans+="RELATIVOS\n";
+        for(auto vec : relativos){
+            ans+= to_string(vec) + " ";
+        }
+        ans+="\n";
+    }
     for(auto i : mem) ans += to_string(i) + " ";
     if (outFile.is_open()) {
         outFile << ans << '\n';
