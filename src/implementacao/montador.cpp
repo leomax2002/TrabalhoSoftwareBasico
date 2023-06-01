@@ -59,7 +59,7 @@ void assemble(string filename, int programas) {
     // arquivo intermediário contendo o texto preprocessado também em .asm
     auxFile.open(filename + "_aux.asm", ios::in);
 
-    // reiniciando as tabelas de simbolos
+    // reiniciando as tabelas de simbolos e a de pendencias
     tabSimb.clear();
     tabPend.clear();
 
@@ -69,9 +69,10 @@ void assemble(string filename, int programas) {
 
     //Struct que define pendências
 
-    int counter = 0;
+    // Contador do endereço de memória
+    int addressCounter = 0;
     //Conta as linhas para exibir nas mensagens de erro
-    int cont_linha = 0;
+    int lineCounter = 0;
     //Flags para verificar Section Text e Section Data
     int flag_texto = 1;
     int flag_data = 1;
@@ -88,21 +89,18 @@ void assemble(string filename, int programas) {
     int flag_mais_de_um_rotulo = 0;
     if (auxFile.is_open()) {
         while ( getline(auxFile, line)) {
-            cont_linha++;
+            lineCounter++;
+
+            // tokenizando a linha em palavras
             stringstream ss(line);
             string word;
             vector<string> lineVec;
             while(ss >> word) lineVec.push_back(word);
 
-            //Retira : de EXTERN e PUBLIC
-
-            if(lineVec[0] == "PUBLIC:" || lineVec[0] == "EXTERN:"){
-                lineVec[0] = lineVec[0].substr(0, lineVec[0].size()-1);
-            }
             // essa linha possui rótulo
             if (lineVec[0].back() == ':') {
                 string label = lineVec[0].substr(0, lineVec[0].size()-1);
-                tabSimb[label] = counter;
+                tabSimb[label] = addressCounter;
                 lineVec.erase(lineVec.begin());
                 vector<string> auxiliar;
                 //Incrementa flag_rot e verifica se há mais de um rótulo na linha
@@ -110,7 +108,7 @@ void assemble(string filename, int programas) {
                 for(int i = 0; i < numWords; i++){
                     if(lineVec[i].back() == ':'){
                         if(flag_mais_de_um_rotulo == 0){
-                        printf("Erro Sintatico na linha %d, mais de um rotulo na mesma linha\n", cont_linha);
+                        printf("Erro Sintatico na linha %d, mais de um rotulo na mesma linha\n", lineCounter);
                         }
                         flag_mais_de_um_rotulo++;
                     }
@@ -124,7 +122,7 @@ void assemble(string filename, int programas) {
                 copy(auxiliar.begin(), auxiliar.end(), back_inserter(lineVec));
                 }
                 //Verifica Erros Léxicos no Rótulo
-                scanner(label, cont_linha);
+                scanner(label, lineCounter);
             }
 
             string instruction = lineVec[0];
@@ -147,19 +145,19 @@ void assemble(string filename, int programas) {
                         //Verifica Section DATA
                         //if(flag_data && erros_ditos_Data){
                         //    erros_ditos_Data = 0;
-                       //     printf("Erro Semantico, sem Section DATA antes da linha %d\n", cont_linha);
+                       //     printf("Erro Semantico, sem Section DATA antes da linha %d\n", lineCounter);
                        // }
                     mem.push_back(0);
-                    counter += 1;
+                    addressCounter += 1;
                 }
 
                 else if (instruction == "CONST") {
                        //Verifica Section DATA
                        // if(flag_data && erros_ditos_Data){
-                       //       printf("Erro Semantico, sem Section DATA antes da linha %d\n", cont_linha);
+                       //       printf("Erro Semantico, sem Section DATA antes da linha %d\n", lineCounter);
                        //  }
                     mem.push_back( stoi(lineVec[1]) );
-                    counter += 1;
+                    addressCounter += 1;
                 }
 
                 else if (instruction == "BEGIN") {
@@ -174,14 +172,14 @@ void assemble(string filename, int programas) {
                         tabUso[arg] = vector<int>();
                         tabSimb[arg] = -1;
                         flag_extern = 1;
-                        if(flag_begin) printf("Erro Semantico na linha %d, sem BEGIN\n", cont_linha);
+                        if(flag_begin) printf("Erro Semantico na linha %d, sem BEGIN\n", lineCounter);
 
                 }
                 else if (instruction == "PUBLIC") {
                         string arg = lineVec[1];
                         tabDef[arg] = vector<int>();
                         flag_public = 1;
-                        if(flag_begin) printf("Erro Semantico na linha %d, sem BEGIN\n", cont_linha);
+                        if(flag_begin) printf("Erro Semantico na linha %d, sem BEGIN\n", lineCounter);
 
                 }
 
@@ -193,23 +191,23 @@ void assemble(string filename, int programas) {
                 //Verifica se Section Text foi definida
                     if(flag_texto && erros_ditos_Txt){
                         erros_ditos_Txt = 0;
-                        printf("Erro Semantico, sem Section TEXT antes da linha %d\n", cont_linha);
+                        printf("Erro Semantico, sem Section TEXT antes da linha %d\n", lineCounter);
                     }
 
                 mem.push_back(tabInstr[instruction].first);
-                counter += 1;
+                addressCounter += 1;
                 int argSize = tabInstr[instruction].second;
                 int ejmp = 0;
                 // adiciona linha a lista de pendencias
                 for(int i=1; i<argSize; i++) {
                     string arg = lineVec[i];
                     //Analisador Léxico
-                    scanner(arg, cont_linha);
+                    scanner(arg, lineCounter);
                     mem.push_back(-1);
                     if (!tabPend.count(arg)) tabPend[arg] = vector<int>();
-                    tabPend[arg].push_back(counter);
-                    relativos.push_back(counter);
-                    tabPend[arg].push_back(cont_linha);
+                    tabPend[arg].push_back(addressCounter);
+                    relativos.push_back(addressCounter);
+                    tabPend[arg].push_back(lineCounter);
 
                     if(instruction == "JMP" || instruction == "JMPZ" || instruction == "JMPP" || instruction == "JMPN"){
                         tabPend[arg].push_back(1);
@@ -217,7 +215,7 @@ void assemble(string filename, int programas) {
                     else{
                         tabPend[arg].push_back(0);
                     }
-                    counter += 1;
+                    addressCounter += 1;
                 }
             }
         }
@@ -225,7 +223,7 @@ void assemble(string filename, int programas) {
 
     //Verifica se há BEGIN e END na linha
     if((flag_extern && flag_end) || (flag_public && flag_end)){
-            printf("Erro Semantico na linha %d, sem END\n", cont_linha);
+            printf("Erro Semantico na linha %d, sem END\n", lineCounter);
 
     }
 
@@ -396,12 +394,26 @@ void preprocess(string filename) {
                 line.insert(pos2+1, " ");
             }
 
-            // removendo espaços em branco e tabulações desnecessárias no meio e (',') do copy
+            // removendo espaços em branco e tabulações desnecessárias no meio
+            // Além disso, retira ',' do copy
+            // E também ':' das diretivas EXTERN PUBLIC
             stringstream ss(line);
             string word;
             line = "";
-            while(ss >> word) if (word != ",") line += word + " ";
-
+            vector<string> lineVec;
+            while(ss >> word) lineVec.push_back(word);
+            int lineVecSz = (int)lineVec.size();
+            for(int i=0; i<lineVecSz; i++) {
+                if  ((i < lineVecSz-1 and lineVec[i+1] == ":") and
+                    (lineVec[i] == "PUBLIC" or lineVec[i] == "EXTERN")) 
+                {
+                    line += lineVec[i] + " ";
+                    i += 1;
+                }
+                else if (lineVec[i] != ",")
+                    line += lineVec[i] + " ";
+            }
+            
             // unindo " :" aos rótulos
             auto pos3 = line.find(" :");
             if (pos3 != string::npos) line.erase(pos3, 1);
