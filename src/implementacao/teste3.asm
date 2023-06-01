@@ -1,7 +1,9 @@
-EXTERN
-INPUT &OLD_DATA
+; Teste 3 - Testando alguns erros
+
+EXTERN ; Uso de Extern Sem Begin, operando para o Extern
+INPUT &OLD_DATA ; Erro lexicos
 LOAD OLD_DATA
-L1: L3: DIV TRES
+L1: L3: DIV TRES ; Erro Sintatico -> mais de um label
 STORE  NEW_DATA
 MUL DOIS
 STORE TMP_DATA

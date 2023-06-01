@@ -93,6 +93,8 @@ void assemble(string filename, int programas) {
         while ( getline(auxFile, line)) {
             lineCounter++;
 
+            dbg(line);
+            
             // tokenizando a linha em palavras
             stringstream ss(line);
             string word;
