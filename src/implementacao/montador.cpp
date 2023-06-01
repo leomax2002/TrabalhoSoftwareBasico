@@ -396,22 +396,12 @@ void preprocess(string filename) {
 
             // removendo espaços em branco e tabulações desnecessárias no meio
             // Além disso, retira ',' do copy
-            // E também ':' das diretivas EXTERN PUBLIC
             stringstream ss(line);
             string word;
             line = "";
-            vector<string> lineVec;
-            while(ss >> word) lineVec.push_back(word);
-            int lineVecSz = (int)lineVec.size();
-            for(int i=0; i<lineVecSz; i++) {
-                if  ((i < lineVecSz-1 and lineVec[i+1] == ":") and
-                    (lineVec[i] == "PUBLIC" or lineVec[i] == "EXTERN")) 
-                {
-                    line += lineVec[i] + " ";
-                    i += 1;
-                }
-                else if (lineVec[i] != ",")
-                    line += lineVec[i] + " ";
+            while(ss >> word) {
+                if (word != ",")
+                    line += word + " ";
             }
             
             // unindo " :" aos rótulos
@@ -420,6 +410,16 @@ void preprocess(string filename) {
 
             // "trim", removendo espaços no fim e começo
             trim(line);
+
+            // retirando ':' de "Extern:" e "Public:"
+            stringstream ss2(line);
+            line = "";
+            while(ss2 >> word) {
+                if (word == "EXTERN:" or word == "PUBLIC:")
+                    line += word.substr(0, word.size()-1) + " ";
+                else
+                    line += word + " ";
+            }
 
             // unindo linhas diferentes que são do mesmo rótulo
             if (line.back() == ':') {
