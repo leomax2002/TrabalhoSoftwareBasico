@@ -1,6 +1,9 @@
 #include <bits/stdc++.h>
 using namespace std;
 
+// for debugging
+template <typename... A> void dbg(A const&... a) { ((cerr << "{" << a << "} "), ...); cerr << endl; }
+
 // Tabela de Instruções
 // "mnemônico" -> {opcode, tamanho de palavras}
 unordered_map<string, pair<int, int>> tabInstr;
@@ -39,12 +42,12 @@ void scanner(string token, int lineCounter){
     for(int i=0; i<sz; i++) {
         // verifica se o primeiro caractere é um número (proibido)
         if ( i == 0 and isdigit(token[i])) {
-            cout << "Erro Lexico no token {" << token << "} da linha: " << lineCounter << endl;
+            cout << "ERROR: Erro Lexico no token {" << token << "} da linha: " << lineCounter << endl;
             return;
         }
         // verifica se todos os caracteres são apenas: letras, underscores ou números
         if ( !(isalpha(token[i]) or isdigit(token[i]) or token[i] == '_') ) {
-            cout << "Erro Lexico no token {" << token << "} da linha: " << lineCounter << endl;
+            cout << "ERROR: Erro Lexico no token {" << token << "} da linha: " << lineCounter << endl;
             return;
         }
     }
@@ -55,8 +58,6 @@ void assemble(string filename, int programas) {
 
     // arquivo intermediário contendo o texto preprocessado também em .asm
     auxFile.open(filename + "_aux.asm", ios::in);
-
-    // ignorando directiva SECTION por enquanto, o que exatamente precisa fazer?
 
     // reiniciando as tabelas de simbolos
     tabSimb.clear();
@@ -377,13 +378,11 @@ void preprocess(string filename) {
     auxFile.open(filename + "_aux.asm", ios::out | ios::trunc);
 
     string line, label;
+    vector<string> fileVec;
 
+    // Lendo arquivo de entrada e limpando formatação
     if (inFile.is_open()) {
         while ( getline(inFile, line)) {
-
-            // pula linhas com apenas '\n', que é removido pelo getline
-            if (line.empty()) continue;
-
             // convertendo cada linha para upper case
             transform(line.begin(), line.end(), line.begin(), ::toupper);
 
@@ -416,16 +415,105 @@ void preprocess(string filename) {
                 continue;
             }
 
+            // pula linhas com apenas '\n', que é removido pelo getline
+            if (line.empty()) continue;
+
             // salvando linha no arquivo intermediário
-            if (label != "") { // se juntei linhas
-                auxFile << label << " " << line << '\n';
+            if (!label.empty()) { // se juntei linhas
+                fileVec.push_back(label + " " + line + '\n');
                 label = "";
             }
             else // se não juntei linhas
-                auxFile << line << '\n';
+                fileVec.push_back(line + '\n');
         }
     }
 
+    // cuidando da diretiva SECTION
+    
+    int secDataLine = -1, secTextLine = -1;
+    int file_sz = (int) fileVec.size();
+    
+    for(int i=0; i<file_sz; i++) {
+        line = fileVec[i];
+
+        // .split()
+        stringstream sss(line);
+        string word;
+        int j = 0;
+        bool flagSection = false;
+        while(sss >> word) {
+            if (j == 0 and word == "SECTION") {
+                flagSection = true;
+            }
+            else if (flagSection and j == 1 and word == "DATA") {
+                secDataLine = i;
+            }
+            else if (flagSection and j == 1 and word == "TEXT") {
+                secTextLine = i;
+            }
+            j += 1;
+        }
+    }
+
+    // debbugging:
+    // cout << "text = " << secTextLine << " data = " << secDataLine << endl;
+
+    vector<string> fileVec2;
+    
+    if (secTextLine == -1) {
+        // Nao tem SECTION TEXT -> erro sintático? (colocar isso)
+        cout << "ERROR: Faltando SECTION TEXT" << endl;
+        
+        // Talvez de ainda para montar o arquivo, portanto:
+        // removendo a linha de SECTION DATA, caso tenha.
+        for(int i=0; i<file_sz; i++) {
+            if (i == secDataLine) continue;
+            fileVec2.push_back(fileVec[i]);
+        }
+    }
+
+    // Nao tem SECTION DATA -> retirar apenas a linha de SECTION TEXT
+    else if (secDataLine == -1) {
+        // Nao tem SECTION DATA -> WARNING (talvez só ignorar?)
+        cout << "WARNING: Faltando SECTION DATA" << endl;
+
+        // removendo a linha de SECTION TEXT
+        for(int i=0; i<file_sz; i++) {
+            if (i == secTextLine) continue;
+            fileVec2.push_back(fileVec[i]);
+        }
+    }
+
+    // Tem SECTION DATA e TEXT, removendo essas linhas e invertendo a ordem caso necessario
+    else {
+
+        // Text vem antes de Data
+        if (secTextLine < secDataLine) {
+            for(int i=0; i<file_sz; i++) {
+                if (i == secTextLine or i == secDataLine) continue;
+                fileVec2.push_back(fileVec[i]);
+            }
+        }
+
+        // DATA vem antes de TEXT
+        else {
+            // copiando cabeçalho
+            for(int i=0; i<secDataLine; i++)
+                fileVec2.push_back(fileVec[i]);
+            
+            // copiando TEXT
+            for(int i=secTextLine+1; i<file_sz; i++)
+                fileVec2.push_back(fileVec[i]);
+            
+            // copiando DATA
+            for(int i=secDataLine+1; i<secTextLine; i++)
+                fileVec2.push_back(fileVec[i]);
+        }
+    }
+    
+    for(auto str : fileVec2) 
+        auxFile << str;
+    
     inFile.close();
     auxFile.close();
 }

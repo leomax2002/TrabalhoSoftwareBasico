@@ -1,7 +1,8 @@
+; Teste 1 - Arquivo Mal Formatado
 
 SECTION TEXT
 INPUT OLD_DATA
-LOAD old_Data
+load old_Data ; minusculo
 L1: DIV DOIS
 STORE  NEW_DATA
 MUL DOIS
