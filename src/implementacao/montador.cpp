@@ -35,17 +35,18 @@ static inline void trim(string &s) {
 
 //Verifica a existência de erros léxicos em Tokens
 void scanner(string token, int lineCounter){
-    // verifica se o primeiro caractere é um '_' ou letra
-    if ( !(token[0] == '_' or isalpha(token[0])) ) {
-        cout << "Erro Lexico no token {" << token << "} da linha: " << lineCounter << endl;
-        return;
-    }
-
-    // verifica se os demais caracteres são letras ou números
-    int sz = token.size();
-    for(int i=1; i<sz; i++) if (!isalpha(token[i] or isdigit(token[i]))) {
-        cout << "Erro Lexico no token {" << token << "} da linha: " << lineCounter << endl;
-        return;
+    int sz = (int) token.size();
+    for(int i=0; i<sz; i++) {
+        // verifica se o primeiro caractere é um número (proibido)
+        if ( i == 0 and isdigit(token[i])) {
+            cout << "Erro Lexico no token {" << token << "} da linha: " << lineCounter << endl;
+            return;
+        }
+        // verifica se todos os caracteres são apenas: letras, underscores ou números
+        if ( !(isalpha(token[i]) or isdigit(token[i]) or token[i] == '_') ) {
+            cout << "Erro Lexico no token {" << token << "} da linha: " << lineCounter << endl;
+            return;
+        }
     }
 }
 
@@ -291,7 +292,6 @@ void assemble(string filename, int programas) {
     auxFile.close();
     outFile.close();
 }
-
 
 void linker(string obj1, string obj2 = "", string obj3 = "", string obj4 = ""){
     fstream outFile, auxFile1,auxFile2,auxFile3,auxFile4;
