@@ -85,8 +85,10 @@ void assemble(string filename, int programas) {
     //Apenas um Alerta de Erro será mostrado
     int erros_ditos_Data = 1;
     int erros_ditos_Txt = 1;
-    //Mais de um Rotulo
-    int flag_mais_de_um_rotulo = 0;
+
+    // Mais de um Rotulo na mesma linha
+    int extraLabelCounter = 0;
+
     if (auxFile.is_open()) {
         while ( getline(auxFile, line)) {
             lineCounter++;
@@ -102,25 +104,18 @@ void assemble(string filename, int programas) {
                 string label = lineVec[0].substr(0, lineVec[0].size()-1);
                 tabSimb[label] = addressCounter;
                 lineVec.erase(lineVec.begin());
-                vector<string> auxiliar;
-                //Incrementa flag_rot e verifica se há mais de um rótulo na linha
-                int numWords = lineVec.size();
-                for(int i = 0; i < numWords; i++){
-                    if(lineVec[i].back() == ':'){
-                        if(flag_mais_de_um_rotulo == 0){
-                        printf("Erro Sintatico na linha %d, mais de um rotulo na mesma linha\n", lineCounter);
-                        }
-                        flag_mais_de_um_rotulo++;
-                    }
-                    else{
 
-                        auxiliar.push_back(lineVec[i]);
-                    }
+                //Incrementa extraLabelCounter, verificando se há mais de um rótulo na linha
+                vector<string> aux;
+                for(auto str : lineVec) {
+                    if (str.back() == ':') extraLabelCounter += 1;
+                    else aux.push_back(str);
                 }
-                if(flag_mais_de_um_rotulo > 0){
-                lineVec.clear();
-                copy(auxiliar.begin(), auxiliar.end(), back_inserter(lineVec));
+                if (extraLabelCounter > 0) {
+                    printf("ERROR: Erro Sintatico na linha %d, mais de um rotulo na mesma linha\n", lineCounter);
+                    lineVec = aux;
                 }
+
                 //Verifica Erros Léxicos no Rótulo
                 scanner(label, lineCounter);
             }
