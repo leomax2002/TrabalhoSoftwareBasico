@@ -432,14 +432,17 @@ void preprocess(string filename) {
 
 int32_t main(int argc, char** argv) {
 
+    // inicializa a tabela de instruções e a de diretivas
     init_fixed_tables();
 
-    // nome dos arquivos passados como argumento no terminal
+    // adquirindo o nome dos arquivos passados como argumento no terminal, 
+    // preprocessando e montando esses arquivos
     for(int i=1; i<argc; i++) {
         string filename = argv[i];
         preprocess(filename);
         assemble(filename,argc);
     }
+
     //Trocar >= por > para teste
     if(argc >= 2){
     linker(argv[1]);
