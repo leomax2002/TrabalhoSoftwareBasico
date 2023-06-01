@@ -36,308 +36,6 @@ static inline void trim(string &s) {
     }).base(), s.end());
 }
 
-//Verifica a existência de erros léxicos em Tokens
-void scanner(string token, int lineCounter){
-    int sz = (int) token.size();
-    for(int i=0; i<sz; i++) {
-        // verifica se o primeiro caractere é um número (proibido)
-        if ( i == 0 and isdigit(token[i])) {
-            cout << "ERROR: Erro Lexico no token {" << token << "} da linha: " << lineCounter << endl;
-            return;
-        }
-        // verifica se todos os caracteres são apenas: letras, underscores ou números
-        if ( !(isalpha(token[i]) or isdigit(token[i]) or token[i] == '_') ) {
-            cout << "ERROR: Erro Lexico no token {" << token << "} da linha: " << lineCounter << endl;
-            return;
-        }
-    }
-}
-
-void assemble(string filename, int programas) {
-    fstream outFile, auxFile;
-
-    // arquivo intermediário contendo o texto preprocessado também em .asm
-    auxFile.open(filename + "_aux.asm", ios::in);
-
-    // reiniciando as tabelas de simbolos e a de pendencias
-    tabSimb.clear();
-    tabPend.clear();
-
-    vector<int> mem;
-    vector<int> relativos;
-    string line;
-
-    //Struct que define pendências
-
-    // Contador do endereço de memória
-    int addressCounter = 0;
-    //Conta as linhas para exibir nas mensagens de erro
-    int lineCounter = 0;
-    //Flags para verificar Section Text e Section Data
-    int flag_texto = 1;
-    int flag_data = 1;
-    //Flags para verificar BEGIN e END
-    int flag_begin = 1;
-    int flag_end = 1;
-    //Flags para verificar EXTERN e PUBLIC
-    int flag_extern = 0;
-    int flag_public = 0;
-    //Apenas um Alerta de Erro será mostrado
-    int erros_ditos_Data = 1;
-    int erros_ditos_Txt = 1;
-
-    // Mais de um Rotulo na mesma linha
-    int extraLabelCounter = 0;
-
-    if (auxFile.is_open()) {
-        while ( getline(auxFile, line)) {
-            lineCounter++;
-
-            dbg(line);
-            
-            // tokenizando a linha em palavras
-            stringstream ss(line);
-            string word;
-            vector<string> lineVec;
-            while(ss >> word) lineVec.push_back(word);
-
-            // essa linha possui rótulo
-            if (lineVec[0].back() == ':') {
-                string label = lineVec[0].substr(0, lineVec[0].size()-1);
-                tabSimb[label] = addressCounter;
-                lineVec.erase(lineVec.begin());
-
-                //Incrementa extraLabelCounter, verificando se há mais de um rótulo na linha
-                vector<string> aux;
-                for(auto str : lineVec) {
-                    if (str.back() == ':') extraLabelCounter += 1;
-                    else aux.push_back(str);
-                }
-                if (extraLabelCounter > 0) {
-                    printf("ERROR: Erro Sintatico na linha %d, mais de um rotulo na mesma linha\n", lineCounter);
-                    lineVec = aux;
-                }
-
-                //Verifica Erros Léxicos no Rótulo
-                scanner(label, lineCounter);
-            }
-
-            string instruction = lineVec[0];
-
-            // verifica se é uma diretiva
-            if (tabDiret[instruction] != 0) {
-
-                if (instruction == "SECTION"){
-                    string tipo = lineVec[1];
-                    if(tipo == "TEXT"){
-                        flag_texto = 0;
-                    }
-                    else if(tipo == "DATA"){
-                        flag_data = 0;
-                    }
-
-                }
-
-                else if (instruction == "SPACE") {
-                        //Verifica Section DATA
-                        //if(flag_data && erros_ditos_Data){
-                        //    erros_ditos_Data = 0;
-                       //     printf("Erro Semantico, sem Section DATA antes da linha %d\n", lineCounter);
-                       // }
-                    mem.push_back(0);
-                    addressCounter += 1;
-                }
-
-                else if (instruction == "CONST") {
-                       //Verifica Section DATA
-                       // if(flag_data && erros_ditos_Data){
-                       //       printf("Erro Semantico, sem Section DATA antes da linha %d\n", lineCounter);
-                       //  }
-                    mem.push_back( stoi(lineVec[1]) );
-                    addressCounter += 1;
-                }
-
-                else if (instruction == "BEGIN") {
-                        flag_begin = 0;
-
-                }
-                else if (instruction == "END") {
-                        flag_end = 0;
-                }
-                else if (instruction == "EXTERN") {
-                        string arg = lineVec[1];
-                        tabUso[arg] = vector<int>();
-                        tabSimb[arg] = -1;
-                        flag_extern = 1;
-                        if(flag_begin) printf("Erro Semantico na linha %d, sem BEGIN\n", lineCounter);
-
-                }
-                else if (instruction == "PUBLIC") {
-                        string arg = lineVec[1];
-                        tabDef[arg] = vector<int>();
-                        flag_public = 1;
-                        if(flag_begin) printf("Erro Semantico na linha %d, sem BEGIN\n", lineCounter);
-
-                }
-
-            }
-
-            // é uma instrução do assembly
-            else {
-                // coloca o opcode na memória
-                //Verifica se Section Text foi definida
-                    if(flag_texto && erros_ditos_Txt){
-                        erros_ditos_Txt = 0;
-                        printf("Erro Semantico, sem Section TEXT antes da linha %d\n", lineCounter);
-                    }
-
-                mem.push_back(tabInstr[instruction].first);
-                addressCounter += 1;
-                int argSize = tabInstr[instruction].second;
-                int ejmp = 0;
-                // adiciona linha a lista de pendencias
-                for(int i=1; i<argSize; i++) {
-                    string arg = lineVec[i];
-                    //Analisador Léxico
-                    scanner(arg, lineCounter);
-                    mem.push_back(-1);
-                    if (!tabPend.count(arg)) tabPend[arg] = vector<int>();
-                    tabPend[arg].push_back(addressCounter);
-                    relativos.push_back(addressCounter);
-                    tabPend[arg].push_back(lineCounter);
-
-                    if(instruction == "JMP" || instruction == "JMPZ" || instruction == "JMPP" || instruction == "JMPN"){
-                        tabPend[arg].push_back(1);
-                    }
-                    else{
-                        tabPend[arg].push_back(0);
-                    }
-                    addressCounter += 1;
-                }
-            }
-        }
-    }
-
-    //Verifica se há BEGIN e END na linha
-    if((flag_extern && flag_end) || (flag_public && flag_end)){
-            printf("Erro Semantico na linha %d, sem END\n", lineCounter);
-
-    }
-
-    // arruma todas as pendências
-    for(auto [lab, vec] : tabPend) {
-        int flag_erro = 0;
-        int flag_idx = 0;
-        for(auto idx : vec) {
-            flag_idx++;
-            if(flag_idx == 1){
-                mem[idx] = tabSimb[lab];
-                if(tabDef.count(lab)){tabDef[lab].push_back(tabSimb[lab]);}
-
-                if(tabUso.count(lab)){tabUso[lab].push_back(idx);}
-            }
-
-            if(flag_idx == 3){
-                flag_idx = 0;
-            }
-
-            if(tabSimb[lab] == 0 && vec[2] == 0 && flag_erro == 0){
-                printf("Erro Semantico, dado nao definido na linha %d\n", vec[1]);
-                flag_erro = 1;
-            }
-            if(tabSimb[lab] == 0 && vec[2] == 1 && flag_erro == 0){
-                printf("Erro Semantico, label nao definido na linha %d\n", vec[1]);
-                flag_erro = 1;
-            }
-        }
-
-    }
-    // arquivo de saída em binário que não vai ser ligado
-     if(flag_extern || flag_public || !flag_begin || !flag_end){
-        outFile.open(filename + ".obj", ios::out | ios::trunc);
-     }
-     else{
-        outFile.open(filename + ".exc", ios::out | ios::trunc);
-     }
-    // escrevendo no arquivo de saída
-    string ans;
-    if(programas > 2 || flag_extern){
-        ans+="USO\n";
-        for(auto [lab, vec] : tabUso){
-            for(auto aux : vec){
-                ans+= lab + " " + to_string(aux) + "\n";
-            }
-        }
-        ans+="DEF\n";
-        for(auto [lab, vec] : tabDef){
-            for(auto aux : vec){
-                ans+= lab + " " + to_string(aux) + "\n";
-            }
-        }
-        ans+="RELATIVOS\n";
-        for(auto vec : relativos){
-            ans+= to_string(vec) + " ";
-        }
-        ans+="\nCODE\n";
-    }
-    for(auto i : mem) ans += to_string(i) + " ";
-    if (outFile.is_open()) {
-        outFile << ans << '\n';
-    }
-
-    auxFile.close();
-    outFile.close();
-}
-
-void linker(string obj1, string obj2 = "", string obj3 = "", string obj4 = ""){
-    fstream outFile, auxFile1,auxFile2,auxFile3,auxFile4;
-    string line;
-    //Variáveis Auxiliares
-    int fator_correcao = 0;
-    int proximo_uso = 0;
-    int proximo_def = 0;
-    int proximo_codigo = 0;
-    auxFile1.open(obj1 + ".obj", ios::in);
-
-    unordered_map<string, int> tgs;
-    unordered_map<string,vector<int>> t_uso;
-    if (auxFile1.is_open()) {
-
-        while ( getline(auxFile1, line)) {
-
-            stringstream ss(line);
-            string word;
-            vector<string> lineVec;
-            while(ss >> word) lineVec.push_back(word);
-            if(lineVec[0] == "USO"){proximo_uso = 1;}
-            else if(lineVec[0] == "DEF"){proximo_def = 1;}
-            else if(lineVec[0] == "CODE"){proximo_codigo = 1;}
-
-            if(proximo_uso){
-                string arg = lineVec[0];
-                int val_uso = stoi(lineVec[1]) + fator_correcao;
-                if (!t_uso.count(arg)) t_uso[arg] = vector<int>();
-                t_uso[arg].push_back(val_uso);
-                proximo_uso = 0;
-            }
-            if(proximo_def){
-                string arg = lineVec[0];
-                int val_uso = stoi(lineVec[1]) + fator_correcao;
-                tgs[arg] = val_uso;
-                proximo_def = 0;
-            }
-            if(proximo_codigo){
-                    fator_correcao = lineVec.size();
-                    proximo_codigo = 0;
-            }
-
-
-        }
-
-    }
-    auxFile1.close();
-}
-
 void init_fixed_tables() {
     tabInstr["ADD"] = {1, 2};
     tabInstr["SUB"] = {2, 2};
@@ -355,8 +53,8 @@ void init_fixed_tables() {
     tabInstr["STOP"] = {14, 1};
 
     tabDiret["CONST"] = 2;
-    tabDiret["SPACE"] = 1;
-    tabDiret["SECTION"] = 1;
+    tabDiret["SPACE"] = 1; // tem que aceitar args extras
+    // tabDiret["SECTION"] = 1; -> considerado no preprocessamento
     tabDiret["EXTERN"] = 1;
     tabDiret["PUBLIC"] = 1;
     tabDiret["BEGIN"] = 1;
@@ -526,6 +224,281 @@ void preprocess(string filename) {
     inFile.close();
     auxFile.close();
 }
+
+//Verifica a existência de erros léxicos em Tokens
+void scanner(string token, int lineCounter){
+    int sz = (int) token.size();
+    for(int i=0; i<sz; i++) {
+        // verifica se o primeiro caractere é um número (proibido)
+        if ( i == 0 and isdigit(token[i])) {
+            cout << "ERROR: Erro Lexico no token {" << token << "} da linha: " << lineCounter << endl;
+            return;
+        }
+        // verifica se todos os caracteres são apenas: letras, underscores ou números
+        if ( !(isalpha(token[i]) or isdigit(token[i]) or token[i] == '_') ) {
+            cout << "ERROR: Erro Lexico no token {" << token << "} da linha: " << lineCounter << endl;
+            return;
+        }
+    }
+}
+
+void assemble(string filename, int programas) {
+    fstream outFile, auxFile;
+
+    // arquivo intermediário contendo o texto preprocessado também em .asm
+    auxFile.open(filename + "_aux.asm", ios::in);
+
+    // reiniciando as tabelas de simbolos e a de pendencias
+    tabSimb.clear();
+    tabPend.clear();
+
+    vector<int> mem;
+    vector<int> relativos;
+    string line;
+
+    //Struct que define pendências
+
+    // Mais de um Rotulo na mesma linha
+    int extraLabelCounter = 0;
+
+    // Contador do endereço de memória
+    int addressCounter = 0;
+    //Conta as linhas para exibir nas mensagens de erro
+    int lineCounter = 0;
+    
+    //Flags para verificar BEGIN e END
+    int flag_begin = 1;
+    int flag_end = 1;
+    //Flags para verificar EXTERN e PUBLIC
+    int flag_extern = 0;
+    int flag_public = 0;
+    //Apenas um Alerta de Erro será mostrado
+    int erros_ditos_Data = 1;
+    int erros_ditos_Txt = 1;
+
+    if (auxFile.is_open()) {
+        while ( getline(auxFile, line)) {
+            lineCounter++;
+
+            dbg(line);
+            
+            // tokenizando a linha em palavras
+            stringstream ss(line);
+            string word;
+            vector<string> lineVec;
+            while(ss >> word) lineVec.push_back(word);
+
+            // essa linha possui rótulo
+            if (lineVec[0].back() == ':') {
+                string label = lineVec[0].substr(0, lineVec[0].size()-1);
+                tabSimb[label] = addressCounter;
+                lineVec.erase(lineVec.begin());
+
+                //Incrementa extraLabelCounter, verificando se há mais de um rótulo na linha
+                vector<string> aux;
+                for(auto str : lineVec) {
+                    if (str.back() == ':') extraLabelCounter += 1;
+                    else aux.push_back(str);
+                }
+                if (extraLabelCounter > 0) {
+                    printf("ERROR: Erro Sintatico na linha %d, mais de um rotulo na mesma linha\n", lineCounter);
+                    lineVec = aux;
+                }
+
+                //Verifica Erros Léxicos no Rótulo
+                scanner(label, lineCounter);
+            }
+
+            string instruction = lineVec[0];
+
+            // verifica se é uma diretiva
+            if (tabDiret[instruction] != 0) {
+
+                if (instruction == "SPACE") {
+                    mem.push_back(0);
+                    addressCounter += 1;
+                }
+
+                else if (instruction == "CONST") {
+                    mem.push_back( stoi(lineVec[1]) );
+                    addressCounter += 1;
+                }
+
+                else if (instruction == "BEGIN") {
+                        flag_begin = 0;
+
+                }
+                else if (instruction == "END") {
+                        flag_end = 0;
+                }
+                else if (instruction == "EXTERN") {
+                        string arg = lineVec[1];
+                        tabUso[arg] = vector<int>();
+                        tabSimb[arg] = -1;
+                        flag_extern = 1;
+                        if(flag_begin) printf("Erro Semantico na linha %d, sem BEGIN\n", lineCounter);
+
+                }
+                else if (instruction == "PUBLIC") {
+                        string arg = lineVec[1];
+                        tabDef[arg] = vector<int>();
+                        flag_public = 1;
+                        if(flag_begin) printf("Erro Semantico na linha %d, sem BEGIN\n", lineCounter);
+
+                }
+
+            }
+
+            // é uma instrução do assembly
+            else {
+                // coloca o opcode na memória
+                mem.push_back(tabInstr[instruction].first);
+                addressCounter += 1;
+                int argSize = tabInstr[instruction].second;
+                int ejmp = 0;
+                // adiciona linha a lista de pendencias
+                for(int i=1; i<argSize; i++) {
+                    string arg = lineVec[i];
+                    //Analisador Léxico
+                    scanner(arg, lineCounter);
+                    mem.push_back(-1);
+                    if (!tabPend.count(arg)) tabPend[arg] = vector<int>();
+                    tabPend[arg].push_back(addressCounter);
+                    relativos.push_back(addressCounter);
+                    tabPend[arg].push_back(lineCounter);
+
+                    if(instruction == "JMP" || instruction == "JMPZ" || instruction == "JMPP" || instruction == "JMPN"){
+                        tabPend[arg].push_back(1);
+                    }
+                    else{
+                        tabPend[arg].push_back(0);
+                    }
+                    addressCounter += 1;
+                }
+            }
+        }
+    }
+
+    //Verifica se há BEGIN e END na linha
+    if((flag_extern && flag_end) || (flag_public && flag_end)){
+            printf("Erro Semantico na linha %d, sem END\n", lineCounter);
+
+    }
+
+    // arruma todas as pendências
+    for(auto [lab, vec] : tabPend) {
+        int flag_erro = 0;
+        int flag_idx = 0;
+        for(auto idx : vec) {
+            flag_idx++;
+            if(flag_idx == 1){
+                mem[idx] = tabSimb[lab];
+                if(tabDef.count(lab)){tabDef[lab].push_back(tabSimb[lab]);}
+
+                if(tabUso.count(lab)){tabUso[lab].push_back(idx);}
+            }
+
+            if(flag_idx == 3){
+                flag_idx = 0;
+            }
+
+            if(tabSimb[lab] == 0 && vec[2] == 0 && flag_erro == 0){
+                printf("Erro Semantico, dado nao definido na linha %d\n", vec[1]);
+                flag_erro = 1;
+            }
+            if(tabSimb[lab] == 0 && vec[2] == 1 && flag_erro == 0){
+                printf("Erro Semantico, label nao definido na linha %d\n", vec[1]);
+                flag_erro = 1;
+            }
+        }
+
+    }
+    // arquivo de saída em binário que não vai ser ligado
+     if(flag_extern || flag_public || !flag_begin || !flag_end){
+        outFile.open(filename + ".obj", ios::out | ios::trunc);
+     }
+     else{
+        outFile.open(filename + ".exc", ios::out | ios::trunc);
+     }
+    // escrevendo no arquivo de saída
+    string ans;
+    if(programas > 2 || flag_extern){
+        ans+="USO\n";
+        for(auto [lab, vec] : tabUso){
+            for(auto aux : vec){
+                ans+= lab + " " + to_string(aux) + "\n";
+            }
+        }
+        ans+="DEF\n";
+        for(auto [lab, vec] : tabDef){
+            for(auto aux : vec){
+                ans+= lab + " " + to_string(aux) + "\n";
+            }
+        }
+        ans+="RELATIVOS\n";
+        for(auto vec : relativos){
+            ans+= to_string(vec) + " ";
+        }
+        ans+="\nCODE\n";
+    }
+    for(auto i : mem) ans += to_string(i) + " ";
+    if (outFile.is_open()) {
+        outFile << ans << '\n';
+    }
+
+    auxFile.close();
+    outFile.close();
+}
+
+void linker(string obj1, string obj2 = "", string obj3 = "", string obj4 = ""){
+    fstream outFile, auxFile1,auxFile2,auxFile3,auxFile4;
+    string line;
+    //Variáveis Auxiliares
+    int fator_correcao = 0;
+    int proximo_uso = 0;
+    int proximo_def = 0;
+    int proximo_codigo = 0;
+    auxFile1.open(obj1 + ".obj", ios::in);
+
+    unordered_map<string, int> tgs;
+    unordered_map<string,vector<int>> t_uso;
+    if (auxFile1.is_open()) {
+
+        while ( getline(auxFile1, line)) {
+
+            stringstream ss(line);
+            string word;
+            vector<string> lineVec;
+            while(ss >> word) lineVec.push_back(word);
+            if(lineVec[0] == "USO"){proximo_uso = 1;}
+            else if(lineVec[0] == "DEF"){proximo_def = 1;}
+            else if(lineVec[0] == "CODE"){proximo_codigo = 1;}
+
+            if(proximo_uso){
+                string arg = lineVec[0];
+                int val_uso = stoi(lineVec[1]) + fator_correcao;
+                if (!t_uso.count(arg)) t_uso[arg] = vector<int>();
+                t_uso[arg].push_back(val_uso);
+                proximo_uso = 0;
+            }
+            if(proximo_def){
+                string arg = lineVec[0];
+                int val_uso = stoi(lineVec[1]) + fator_correcao;
+                tgs[arg] = val_uso;
+                proximo_def = 0;
+            }
+            if(proximo_codigo){
+                    fator_correcao = lineVec.size();
+                    proximo_codigo = 0;
+            }
+
+
+        }
+
+    }
+    auxFile1.close();
+}
+
 
 int32_t main(int argc, char** argv) {
 

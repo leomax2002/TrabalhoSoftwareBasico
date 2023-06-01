@@ -1,6 +1,7 @@
 ; Teste 3 - Testando alguns erros
 
 EXTERN ; Uso de Extern Sem Begin, operando para o Extern
+        ; falta de Section Text
 INPUT &OLD_DATA ; Erro lexicos
 LOAD OLD_DATA
 L1: L3: DIV TRES ; Erro Sintatico -> mais de um label
