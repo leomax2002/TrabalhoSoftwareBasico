@@ -32,13 +32,17 @@ static inline void trim(string &s) {
 }
 
 //Verifica a existência de erros léxicos em Tokens
-void analisador_lexico(string arg, int cont){
-    bool f = isalpha(arg[0]);
-    if(!f && arg[0] != '_'){
-        printf("Erro Lexico na linha %d, Token invalido\n", cont);
+void scanner(string token, int lineCounter){
+    if ( !(token[0] == '_' or isalpha(token[0])) ) {
+        cout << "Erro Lexico no token {" << token << "} da linha: " << lineCounter << endl;
+        return;
+    }
+    int sz = token.size();
+    for(int i=1; i<sz; i++) if (!isalpha(token[i])) {
+        cout << "Erro Lexico no token {" << token << "} da linha: " << lineCounter << endl;
+        return;
     }
 }
-
 
 void assemble(string filename, int programas) {
     fstream outFile, auxFile;
@@ -114,7 +118,7 @@ void assemble(string filename, int programas) {
                 copy(auxiliar.begin(), auxiliar.end(), back_inserter(lineVec));
                 }
                 //Verifica Erros Léxicos no Rótulo
-                analisador_lexico(label, cont_linha);
+                scanner(label, cont_linha);
             }
 
             string instruction = lineVec[0];
@@ -194,7 +198,7 @@ void assemble(string filename, int programas) {
                 for(int i=1; i<argSize; i++) {
                     string arg = lineVec[i];
                     //Analisador Léxico
-                    analisador_lexico(arg, cont_linha);
+                    scanner(arg, cont_linha);
                     mem.push_back(-1);
                     if (!tabPend.count(arg)) tabPend[arg] = vector<int>();
                     tabPend[arg].push_back(counter);
