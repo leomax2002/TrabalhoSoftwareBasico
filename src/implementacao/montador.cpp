@@ -135,19 +135,19 @@ void assemble(string filename, int programas) {
 
                 else if (instruction == "SPACE") {
                         //Verifica Section DATA
-                        if(flag_data && erros_ditos_Data){
-                            erros_ditos_Data = 0;
-                            printf("Erro Semantico, sem Section DATA antes da linha %d\n", cont_linha);
-                        }
+                        //if(flag_data && erros_ditos_Data){
+                        //    erros_ditos_Data = 0;
+                       //     printf("Erro Semantico, sem Section DATA antes da linha %d\n", cont_linha);
+                       // }
                     mem.push_back(0);
                     counter += 1;
                 }
 
                 else if (instruction == "CONST") {
-                        //Verifica Section DATA
-                        if(flag_data && erros_ditos_Data){
-                            printf("Erro Semantico, sem Section DATA antes da linha %d\n", cont_linha);
-                        }
+                       //Verifica Section DATA
+                       // if(flag_data && erros_ditos_Data){
+                       //       printf("Erro Semantico, sem Section DATA antes da linha %d\n", cont_linha);
+                       //  }
                     mem.push_back( stoi(lineVec[1]) );
                     counter += 1;
                 }
