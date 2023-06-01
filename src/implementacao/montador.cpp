@@ -19,8 +19,6 @@ unordered_map<string, int> tabSimb;
 // Pendências da Tabela de Simbolos
 unordered_map<string, vector<int>> tabPend;
 
-//unordered_map<string, vector<tuple<int,int,int>>> tabPend2;
-
 //Tabela de Definições
 unordered_map<string, vector<int>> tabDef;
 
@@ -53,10 +51,10 @@ void init_fixed_tables() {
     tabInstr["STOP"] = {14, 1};
 
     tabDiret["CONST"] = 2;
-    tabDiret["SPACE"] = 1; // tem que aceitar args extras
+    tabDiret["SPACE"] = 2; // tem que aceitar args extras
     // tabDiret["SECTION"] = 1; -> considerado no preprocessamento
-    tabDiret["EXTERN"] = 1;
-    tabDiret["PUBLIC"] = 1;
+    tabDiret["EXTERN"] = 2;
+    tabDiret["PUBLIC"] = 2;
     tabDiret["BEGIN"] = 1;
     tabDiret["END"] = 1;
 }
@@ -169,7 +167,7 @@ void preprocess(string filename) {
     
     if (secTextLine == -1) {
         // Nao tem SECTION TEXT -> erro sintático? (colocar isso)
-        cout << "ERROR: Faltando SECTION TEXT" << endl;
+        cout << "WARNING: Faltando SECTION TEXT" << endl;
         
         // Talvez de ainda para montar o arquivo, portanto:
         // removendo a linha de SECTION DATA, caso tenha.
@@ -242,15 +240,17 @@ void scanner(string token, int lineCounter){
     }
 }
 
-void assemble(string filename, int programas) {
+bool assemble(string filename, int programas) {
     fstream outFile, auxFile;
 
     // arquivo intermediário contendo o texto preprocessado também em .asm
     auxFile.open(filename + "_aux.asm", ios::in);
 
-    // reiniciando as tabelas de simbolos e a de pendencias
+    // reiniciando as tabelas
     tabSimb.clear();
     tabPend.clear();
+    tabUso.clear();
+    tabDef.clear();
 
     vector<int> mem;
     vector<int> relativos;
@@ -263,23 +263,24 @@ void assemble(string filename, int programas) {
 
     // Contador do endereço de memória
     int addressCounter = 0;
-    //Conta as linhas para exibir nas mensagens de erro
-    int lineCounter = 0;
+
+    // Contador as linhas para exibir nas mensagens de erro
+    int lineCounter = 1; // indexado em 1
     
-    //Flags para verificar BEGIN e END
-    int flag_begin = 1;
-    int flag_end = 1;
-    //Flags para verificar EXTERN e PUBLIC
+    // Flags para verificar se existe BEGIN e END
+    int flag_begin = 0;
+    int flag_end = 0;
+
+    // Flags para verificar se existe EXTERN e PUBLIC
     int flag_extern = 0;
     int flag_public = 0;
-    //Apenas um Alerta de Erro será mostrado
+
+    // Apenas um Alerta de Erro será mostrado
     int erros_ditos_Data = 1;
     int erros_ditos_Txt = 1;
 
     if (auxFile.is_open()) {
         while ( getline(auxFile, line)) {
-            lineCounter++;
-
             dbg(line);
             
             // tokenizando a linha em palavras
@@ -301,7 +302,7 @@ void assemble(string filename, int programas) {
                     else aux.push_back(str);
                 }
                 if (extraLabelCounter > 0) {
-                    printf("ERROR: Erro Sintatico na linha %d, mais de um rotulo na mesma linha\n", lineCounter);
+                    printf("ERROR: (Erro Sintatico) na linha %d. Mais de um rotulo na mesma linha\n", lineCounter);
                     lineVec = aux;
                 }
 
@@ -315,36 +316,57 @@ void assemble(string filename, int programas) {
             if (tabDiret[instruction] != 0) {
 
                 if (instruction == "SPACE") {
+
+                    // TODO: Implementar caso em que ha argumentos passados para SPACE
+    
                     mem.push_back(0);
                     addressCounter += 1;
                 }
 
                 else if (instruction == "CONST") {
+                    // Se não tiver o segundo argumento -> segfault
+                    if (lineVec.size() < 2) {
+                        cout << "ERROR: (Erro Sintatico) na linha " << lineCounter << ". Instrucao CONST nao possui argumento." << endl;
+                        return false;
+                    }
                     mem.push_back( stoi(lineVec[1]) );
                     addressCounter += 1;
                 }
 
                 else if (instruction == "BEGIN") {
-                        flag_begin = 0;
-
+                    flag_begin = 1;
                 }
+
                 else if (instruction == "END") {
-                        flag_end = 0;
+                    flag_end = 1;
                 }
+
                 else if (instruction == "EXTERN") {
-                        string arg = lineVec[1];
-                        tabUso[arg] = vector<int>();
-                        tabSimb[arg] = -1;
-                        flag_extern = 1;
-                        if(flag_begin) printf("Erro Semantico na linha %d, sem BEGIN\n", lineCounter);
+                    if (lineVec.size() < 2) {
+                        cout << "ERROR: (Erro Sintatico) na linha " << lineCounter << ". Instrucao EXTERN nao possui argumento"  << endl;
+                        return false;
+                    }
 
+                    string arg = lineVec[1];
+                    tabUso[arg] = vector<int>();
+                    tabSimb[arg] = -1;
+                    flag_extern = 1;
+
+                    if(flag_begin) 
+                        printf("WARNING: (Erro Semantico) na linha %d, sem BEGIN\n", lineCounter);
                 }
-                else if (instruction == "PUBLIC") {
-                        string arg = lineVec[1];
-                        tabDef[arg] = vector<int>();
-                        flag_public = 1;
-                        if(flag_begin) printf("Erro Semantico na linha %d, sem BEGIN\n", lineCounter);
 
+                else if (instruction == "PUBLIC") {
+                    if (lineVec.size() < 2) {
+                        cout << "ERROR: (Erro Sintatico) na linha " << lineCounter << ". Instrucao PUBLIC nao possui argumento"  << endl;
+                        return false;
+                    }
+
+                    string arg = lineVec[1];
+                    tabDef[arg] = vector<int>();
+                    flag_public = 1;
+                    if(flag_begin) 
+                        printf("WARNING: (Erro Semantico) na linha %d, sem BEGIN\n", lineCounter);
                 }
 
             }
@@ -355,37 +377,47 @@ void assemble(string filename, int programas) {
                 mem.push_back(tabInstr[instruction].first);
                 addressCounter += 1;
                 int argSize = tabInstr[instruction].second;
-                int ejmp = 0;
+
+                //int ejmp = 0; // ? 
+
                 // adiciona linha a lista de pendencias
                 for(int i=1; i<argSize; i++) {
                     string arg = lineVec[i];
+
                     //Analisador Léxico
                     scanner(arg, lineCounter);
-                    mem.push_back(-1);
+
+                    // adiciona pendencia
+                    mem.push_back(-1); 
+
+                    // caso o vetor de pendencias desse label nao esteja inicializado
                     if (!tabPend.count(arg)) tabPend[arg] = vector<int>();
+
                     tabPend[arg].push_back(addressCounter);
                     relativos.push_back(addressCounter);
-                    tabPend[arg].push_back(lineCounter);
 
-                    if(instruction == "JMP" || instruction == "JMPZ" || instruction == "JMPP" || instruction == "JMPN"){
-                        tabPend[arg].push_back(1);
-                    }
-                    else{
-                        tabPend[arg].push_back(0);
-                    }
+                    // tabPend[arg].push_back(lineCounter);
+                    //
+                    // if(instruction == "JMP" || instruction == "JMPZ" || instruction == "JMPP" || instruction == "JMPN"){
+                    //     tabPend[arg].push_back(1);
+                    // }
+                    // else{
+                    //     tabPend[arg].push_back(0);
+                    // }
+
                     addressCounter += 1;
                 }
             }
+            lineCounter++;
         }
     }
 
-    //Verifica se há BEGIN e END na linha
-    if((flag_extern && flag_end) || (flag_public && flag_end)){
-            printf("Erro Semantico na linha %d, sem END\n", lineCounter);
+    // Verifica se nao ha END, mesmo tendo BEGIN, EXTERN ou PUBLIC
+    if(!flag_end)
+        if (flag_begin or flag_extern or flag_public)
+            printf("WARNING: (Erro Semantico) na linha %d, sem END\n", lineCounter);
 
-    }
-
-    // arruma todas as pendências
+    // Arruma todas as pendências (continuar verificando daqui)
     for(auto [lab, vec] : tabPend) {
         int flag_erro = 0;
         int flag_idx = 0;
@@ -413,6 +445,7 @@ void assemble(string filename, int programas) {
         }
 
     }
+
     // arquivo de saída em binário que não vai ser ligado
      if(flag_extern || flag_public || !flag_begin || !flag_end){
         outFile.open(filename + ".obj", ios::out | ios::trunc);
@@ -420,6 +453,7 @@ void assemble(string filename, int programas) {
      else{
         outFile.open(filename + ".exc", ios::out | ios::trunc);
      }
+
     // escrevendo no arquivo de saída
     string ans;
     if(programas > 2 || flag_extern){
@@ -448,6 +482,9 @@ void assemble(string filename, int programas) {
 
     auxFile.close();
     outFile.close();
+
+    // nao houve problemas para montar
+    return true; 
 }
 
 void linker(string obj1, string obj2 = "", string obj3 = "", string obj4 = ""){
@@ -510,11 +547,12 @@ int32_t main(int argc, char** argv) {
     for(int i=1; i<argc; i++) {
         string filename = argv[i];
         preprocess(filename);
-        assemble(filename,argc);
+        if ( !assemble(filename,argc) )
+            cout << "Falha na Montagem do Arquivo" << filename << endl;
     }
 
     //Trocar >= por > para teste
     if(argc >= 2){
-    linker(argv[1]);
+        linker(argv[1]);
     }
 }
