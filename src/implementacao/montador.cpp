@@ -20,8 +20,10 @@ unordered_map<string, vector<int>> tabPend;
 
 //Tabela de Definições
 unordered_map<string, vector<int>> tabDef;
+
 //Tabela de Uso
 unordered_map<string, vector<int>> tabUso;
+
 static inline void trim(string &s) {
     s.erase(s.begin(), find_if(s.begin(), s.end(), [](unsigned char ch) {
         return !isspace(ch);
@@ -50,9 +52,8 @@ void scanner(string token, int lineCounter){
 void assemble(string filename, int programas) {
     fstream outFile, auxFile;
 
-
-    // arquivo intermediário contendo o texto preprocessado em .txt
-    auxFile.open(filename + "_aux.txt", ios::in);
+    // arquivo intermediário contendo o texto preprocessado também em .asm
+    auxFile.open(filename + "_aux.asm", ios::in);
 
     // ignorando directiva SECTION por enquanto, o que exatamente precisa fazer?
 
@@ -340,6 +341,7 @@ void linker(string obj1, string obj2 = "", string obj3 = "", string obj4 = ""){
     }
     auxFile1.close();
 }
+
 void init_fixed_tables() {
     tabInstr["ADD"] = {1, 2};
     tabInstr["SUB"] = {2, 2};
@@ -372,14 +374,14 @@ void preprocess(string filename) {
     inFile.open(filename + ".asm", ios::in);
 
     // arquivo intermediário contendo o texto preprocessado em .txt
-    auxFile.open(filename + "_aux.txt", ios::out | ios::trunc);
+    auxFile.open(filename + "_aux.asm", ios::out | ios::trunc);
 
     string line, label;
 
     if (inFile.is_open()) {
         while ( getline(inFile, line)) {
 
-            // skip lines with only '\n'
+            // pula linhas com apenas '\n', que é removido pelo getline
             if (line.empty()) continue;
 
             // convertendo cada linha para upper case
@@ -389,10 +391,10 @@ void preprocess(string filename) {
             auto pos = line.find(";");
             if (pos != string::npos) line = line.substr(0, pos);
 
-            // criando um espaço depois de ": "
-            auto pos3 = line.find(":");
-            if (pos3 != string::npos) {
-                line.insert(pos3+1, " ");
+            // criando um espaço depois de ":" -> ": "
+            auto pos2 = line.find(":");
+            if (pos2 != string::npos) {
+                line.insert(pos2+1, " ");
             }
 
             // removendo espaços em branco e tabulações desnecessárias no meio e (',') do copy
@@ -402,24 +404,25 @@ void preprocess(string filename) {
             while(ss >> word) if (word != ",") line += word + " ";
 
             // unindo " :" aos rótulos
-            auto pos2 = line.find(" :");
-            if (pos2 != string::npos) line.erase(pos2, 1);
+            auto pos3 = line.find(" :");
+            if (pos3 != string::npos) line.erase(pos3, 1);
 
             // "trim", removendo espaços no fim e começo
             trim(line);
 
-            // unindo linhas que são do mesmo rótulo
+            // unindo linhas diferentes que são do mesmo rótulo
             if (line.back() == ':') {
                 label = line;
                 continue;
             }
 
             // salvando linha no arquivo intermediário
-            if (label != "") {
+            if (label != "") { // se juntei linhas
                 auxFile << label << " " << line << '\n';
                 label = "";
             }
-            else auxFile << line << '\n';
+            else // se não juntei linhas
+                auxFile << line << '\n';
         }
     }
 
