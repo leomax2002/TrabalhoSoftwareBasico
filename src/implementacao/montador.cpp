@@ -16,6 +16,8 @@ unordered_map<string, int> tabSimb;
 // Pendências da Tabela de Simbolos
 unordered_map<string, vector<int>> tabPend;
 
+//unordered_map<string, vector<tuple<int,int,int>>> tabPend2;
+
 //Tabela de Definições
 unordered_map<string, vector<int>> tabDef;
 //Tabela de Uso
@@ -38,7 +40,7 @@ void analisador_lexico(string arg, int cont){
 }
 
 
-void assemble(string filename) {
+void assemble(string filename, int programas) {
     fstream outFile, auxFile;
 
 
@@ -54,6 +56,9 @@ void assemble(string filename) {
     vector<int> mem;
     vector<int> relativos;
     string line;
+
+    //Struct que define pendências
+
     int counter = 0;
     //Conta as linhas para exibir nas mensagens de erro
     int cont_linha = 0;
@@ -79,6 +84,11 @@ void assemble(string filename) {
             vector<string> lineVec;
             while(ss >> word) lineVec.push_back(word);
 
+            //Retira : de EXTERN e PUBLIC
+
+            if(lineVec[0] == "PUBLIC:" || lineVec[0] == "EXTERN:"){
+                lineVec[0] = lineVec[0].substr(0, lineVec[0].size()-1);
+            }
             // essa linha possui rótulo
             if (lineVec[0].back() == ':') {
                 string label = lineVec[0].substr(0, lineVec[0].size()-1);
@@ -179,7 +189,7 @@ void assemble(string filename) {
                 mem.push_back(tabInstr[instruction].first);
                 counter += 1;
                 int argSize = tabInstr[instruction].second;
-
+                int ejmp = 0;
                 // adiciona linha a lista de pendencias
                 for(int i=1; i<argSize; i++) {
                     string arg = lineVec[i];
@@ -190,6 +200,7 @@ void assemble(string filename) {
                     tabPend[arg].push_back(counter);
                     relativos.push_back(counter);
                     tabPend[arg].push_back(cont_linha);
+
                     if(instruction == "JMP" || instruction == "JMPZ" || instruction == "JMPP" || instruction == "JMPN"){
                         tabPend[arg].push_back(1);
                     }
@@ -245,7 +256,7 @@ void assemble(string filename) {
      }
     // escrevendo no arquivo de saída
     string ans;
-    if(flag_extern || flag_public || !flag_begin || !flag_end){
+    if(programas > 2 || flag_extern){
         ans+="USO\n";
         for(auto [lab, vec] : tabUso){
             for(auto aux : vec){
@@ -262,7 +273,7 @@ void assemble(string filename) {
         for(auto vec : relativos){
             ans+= to_string(vec) + " ";
         }
-        ans+="\n";
+        ans+="\nCODE\n";
     }
     for(auto i : mem) ans += to_string(i) + " ";
     if (outFile.is_open()) {
@@ -273,6 +284,55 @@ void assemble(string filename) {
     outFile.close();
 }
 
+
+void linker(string obj1, string obj2 = "", string obj3 = "", string obj4 = ""){
+    fstream outFile, auxFile1,auxFile2,auxFile3,auxFile4;
+    string line;
+    //Variáveis Auxiliares
+    int fator_correcao = 0;
+    int proximo_uso = 0;
+    int proximo_def = 0;
+    int proximo_codigo = 0;
+    auxFile1.open(obj1 + ".obj", ios::in);
+
+    unordered_map<string, int> tgs;
+    unordered_map<string,vector<int>> t_uso;
+    if (auxFile1.is_open()) {
+
+        while ( getline(auxFile1, line)) {
+
+            stringstream ss(line);
+            string word;
+            vector<string> lineVec;
+            while(ss >> word) lineVec.push_back(word);
+            if(lineVec[0] == "USO"){proximo_uso = 1;}
+            else if(lineVec[0] == "DEF"){proximo_def = 1;}
+            else if(lineVec[0] == "CODE"){proximo_codigo = 1;}
+
+            if(proximo_uso){
+                string arg = lineVec[0];
+                int val_uso = stoi(lineVec[1]) + fator_correcao;
+                if (!t_uso.count(arg)) t_uso[arg] = vector<int>();
+                t_uso[arg].push_back(val_uso);
+                proximo_uso = 0;
+            }
+            if(proximo_def){
+                string arg = lineVec[0];
+                int val_uso = stoi(lineVec[1]) + fator_correcao;
+                tgs[arg] = val_uso;
+                proximo_def = 0;
+            }
+            if(proximo_codigo){
+                    fator_correcao = lineVec.size();
+                    proximo_codigo = 0;
+            }
+
+
+        }
+
+    }
+    auxFile1.close();
+}
 void init_fixed_tables() {
     tabInstr["ADD"] = {1, 2};
     tabInstr["SUB"] = {2, 2};
@@ -368,6 +428,10 @@ int32_t main(int argc, char** argv) {
     for(int i=1; i<argc; i++) {
         string filename = argv[i];
         preprocess(filename);
-        assemble(filename);
+        assemble(filename,argc);
+    }
+    //Trocar >= por > para teste
+    if(argc >= 2){
+    linker(argv[1]);
     }
 }
