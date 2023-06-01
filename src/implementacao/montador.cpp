@@ -33,12 +33,15 @@ static inline void trim(string &s) {
 
 //Verifica a existência de erros léxicos em Tokens
 void scanner(string token, int lineCounter){
+    // verifica se o primeiro caractere é um '_' ou letra
     if ( !(token[0] == '_' or isalpha(token[0])) ) {
         cout << "Erro Lexico no token {" << token << "} da linha: " << lineCounter << endl;
         return;
     }
+
+    // verifica se os demais caracteres são letras ou números
     int sz = token.size();
-    for(int i=1; i<sz; i++) if (!isalpha(token[i])) {
+    for(int i=1; i<sz; i++) if (!isalpha(token[i] or isdigit(token[i]))) {
         cout << "Erro Lexico no token {" << token << "} da linha: " << lineCounter << endl;
         return;
     }
