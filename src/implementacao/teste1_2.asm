@@ -1,7 +1,7 @@
-; Teste 1_2 - Arquivo Modulo Mal Formatado
+; Teste 1_2 - Arquivo Modulo Mal Formatado, mas funcional
 
 BIN1: BEGIN
-EXTERN: B2 ; EXTERN com caracter ':'
+EXTERN: BIN2 ; EXTERN com caracter ':'
 EXTERN : OLD_DATA ; EXTERN com caracter ':' e espaçado
 PUBLIC: L1 ; PUBLIC com caracter ':'
 SECTION TEXT

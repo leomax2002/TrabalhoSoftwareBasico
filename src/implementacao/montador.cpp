@@ -243,7 +243,7 @@ void scanner(string token, int lineCounter){
     }
 }
 
-bool assemble(string filename, int programas) {
+bool assemble(string filename) {
     fstream outFile, auxFile;
 
     // arquivo intermediário contendo o texto preprocessado também em .asm
@@ -257,12 +257,8 @@ bool assemble(string filename, int programas) {
 
     vector<int> mem;
     vector<int> relativos;
+    set<string> tipoDado; // se um label é de dado, em vez de endereço
     string line;
-
-    //Struct que define pendências
-
-    // Mais de um Rotulo na mesma linha
-    int extraLabelCounter = 0;
 
     // Contador do endereço de memória
     int addressCounter = 0;
@@ -270,21 +266,19 @@ bool assemble(string filename, int programas) {
     // Contador as linhas para exibir nas mensagens de erro
     int lineCounter = 1; // indexado em 1
     
-    // Flags para verificar se existe BEGIN e END
+    // Flags para verificar se existe e quantos existem: BEGIN e END
     int flag_begin = 0;
     int flag_end = 0;
 
     // Flags para verificar se existe EXTERN e PUBLIC
-    int flag_extern = 0;
-    int flag_public = 0;
+    bool flag_extern = 0;
+    bool flag_public = 0;
 
-    // Apenas um Alerta de Erro será mostrado
-    int erros_ditos_Data = 1;
-    int erros_ditos_Txt = 1;
+    // Mais de um Rotulo na mesma linha
+    int extraLabelCounter = 0;
 
     if (auxFile.is_open()) {
         while ( getline(auxFile, line)) {
-            dbg(line);
             
             // tokenizando a linha em palavras
             stringstream ss(line);
@@ -292,9 +286,10 @@ bool assemble(string filename, int programas) {
             vector<string> lineVec;
             while(ss >> word) lineVec.push_back(word);
 
+            string label = "";
             // essa linha possui rótulo
             if (lineVec[0].back() == ':') {
-                string label = lineVec[0].substr(0, lineVec[0].size()-1);
+                label = lineVec[0].substr(0, lineVec[0].size()-1);
                 tabSimb[label] = addressCounter;
                 lineVec.erase(lineVec.begin());
 
@@ -306,6 +301,7 @@ bool assemble(string filename, int programas) {
                 }
                 if (extraLabelCounter > 0) {
                     printf("ERROR: (Erro Sintatico) na linha %d. Mais de um rotulo na mesma linha\n", lineCounter);
+                    // linha sem labels
                     lineVec = aux;
                 }
 
@@ -323,25 +319,32 @@ bool assemble(string filename, int programas) {
                     // TODO: Implementar caso em que ha argumentos passados para SPACE
     
                     mem.push_back(0);
+                    tipoDado.insert({label});
                     addressCounter += 1;
                 }
 
                 else if (instruction == "CONST") {
-                    // Se não tiver o segundo argumento -> segfault
                     if (lineVec.size() < 2) {
                         cout << "ERROR: (Erro Sintatico) na linha " << lineCounter << ". Instrucao CONST nao possui argumento." << endl;
                         return false;
                     }
                     mem.push_back( stoi(lineVec[1]) );
+                    tipoDado.insert({label});
                     addressCounter += 1;
                 }
 
                 else if (instruction == "BEGIN") {
-                    flag_begin = 1;
+                    flag_begin += 1;
+
+                    if (flag_begin >= 2)
+                        cout << "ERROR: (Erro Sintatico) na linha " << lineCounter << ". Mais de uma Instrucao BEGIN"  << endl;
                 }
 
                 else if (instruction == "END") {
-                    flag_end = 1;
+                    flag_end += 1;
+
+                    if (flag_end >= 2)
+                        cout << "ERROR: (Erro Sintatico) na linha " << lineCounter << ". Mais de uma Instrucao END"  << endl;
                 }
 
                 else if (instruction == "EXTERN") {
@@ -355,7 +358,7 @@ bool assemble(string filename, int programas) {
                     tabSimb[arg] = -1; // label externo 
                     flag_extern = 1;
 
-                    if(flag_begin) 
+                    if(!flag_begin) 
                         printf("WARNING: (Erro Semantico) na linha %d, sem BEGIN\n", lineCounter);
                 }
 
@@ -366,22 +369,21 @@ bool assemble(string filename, int programas) {
                     }
 
                     string arg = lineVec[1];
-                    tabDef[arg] = lineCounter; // inicializando todos os labels externos 
+                    // inicializando todos os labels externos com o contador de linha caso precise
+                    tabDef[arg] = lineCounter; 
                     flag_public = 1;
-                    if(flag_begin) 
+                    if(!flag_begin) 
                         printf("WARNING: (Erro Semantico) na linha %d, sem BEGIN\n", lineCounter);
                 }
 
             }
 
-            // é uma instrução do assembly
+            // É uma instrução do assembly
             else {
                 // coloca o opcode na memória
                 mem.push_back(tabInstr[instruction].first);
                 addressCounter += 1;
                 int argSize = tabInstr[instruction].second;
-
-                //int ejmp = 0; // ? 
 
                 // adiciona os argumentos dessa linha na lista de pendencias
                 for(int i=1; i<argSize; i++) {
@@ -397,16 +399,9 @@ bool assemble(string filename, int programas) {
                     if (!tabPend.count(arg)) tabPend[arg] = vector<pair<int, int>>();
 
                     tabPend[arg].push_back({addressCounter, lineCounter});
-                    relativos.push_back(addressCounter);
 
-                    // tabPend[arg].push_back(lineCounter);
-                    //
-                    // if(instruction == "JMP" || instruction == "JMPZ" || instruction == "JMPP" || instruction == "JMPN"){
-                    //     tabPend[arg].push_back(1);
-                    // }
-                    // else{
-                    //     tabPend[arg].push_back(0);
-                    // }
+                    // qualquer espaço de memória que não guarda opcode de alguma instrução
+                    relativos.push_back(addressCounter);
 
                     addressCounter += 1;
                 }
@@ -422,12 +417,13 @@ bool assemble(string filename, int programas) {
 
     // Arruma todas as pendências da tabUso e tabPend
     for(auto [lab, vec] : tabPend) {
-
         for(auto [addressIdx, lineIdx] : vec) {
-
-            // rotulo nunca definido (nem internamente, nem externamente)
+            // rotulo nunca definido nem internamente (>= 0), nem externamente (== -1)
             if (!tabSimb.count(lab)) {
-                printf("ERROR: (Erro Semantico) na linha %d. Rotulo nao definido.\n", lineIdx);
+                if (tipoDado.count(lab))
+                    printf("ERROR: (Erro Semantico) na linha %d. Rotulo de Dado nao definido.\n", lineIdx);
+                else
+                    printf("ERROR: (Erro Semantico) na linha %d. Rotulo de Endereço nao definido.\n", lineIdx);
                 return false;
             }
 
@@ -441,93 +437,52 @@ bool assemble(string filename, int programas) {
                 mem[addressIdx] = tabSimb[lab];
             }
         }
-
-        for(auto [addressIdx, lineIdx] : vec) {
-
-            // rotulo nunca definido (nem internamente, nem externamente)
-            if (!tabSimb.count(lab)) {
-                printf("ERROR: (Erro Semantico) na linha %d. Rotulo nao definido.\n", lineIdx);
-                return false;
-            }
-
-            // rotulo externo
-            if (tabSimb[lab] == -1) {
-                tabUso[lab].push_back(addressIdx);
-            }
-
-            // rotulo interno
-            else {
-                mem[addressIdx] = tabSimb[lab];
-            }
-        }
-        // int flag_erro = 0;
-        // int flag_idx = 0;
-        // for(auto idx : vec) {
-        //     flag_idx++;
-        //     if(flag_idx == 1){
-        //         mem[idx] = tabSimb[lab];
-        //         if(tabDef.count(lab)){tabDef[lab].push_back(tabSimb[lab]);}
-
-        //         if(tabUso.count(lab)){tabUso[lab].push_back(idx);}
-        //     }
-
-        //     if(flag_idx == 3){
-        //         flag_idx = 0;
-        //     }
-
-        //     if(tabSimb[lab] == 0 && vec[2] == 0 && flag_erro == 0){
-        //         printf("Erro Semantico, dado nao definido na linha %d\n", vec[1]);
-        //         flag_erro = 1;
-        //     }
-        //     if(tabSimb[lab] == 0 && vec[2] == 1 && flag_erro == 0){
-        //         printf("Erro Semantico, label nao definido na linha %d\n", vec[1]);
-        //         flag_erro = 1;
-        //     }
-        // }
-
     }
 
     // Configurando os endereços da tabela de definiçoes
     for(auto [lab, lineIdx] : tabDef) {
 
         if (!tabSimb.count(lab)) {
-            printf("ERROR: (Erro Semantico) na linha %d. Dado nao definido.\n", lineIdx);
+            if (tipoDado.count(lab))
+                printf("ERROR: (Erro Semantico) na linha %d. Rotulo de Dado nao definido.\n", lineIdx);
+            else
+                printf("ERROR: (Erro Semantico) na linha %d. Rotulo de Endereço nao definido.\n", lineIdx);
             return false;
         }
 
         tabDef[lab] = tabSimb[lab];
     }
 
-    // arquivo de saída em binário que não vai ser ligado
-     if(flag_extern || flag_public || !flag_begin || !flag_end){
-        outFile.open(filename + ".obj", ios::out | ios::trunc);
-     }
-     else{
-        outFile.open(filename + ".exc", ios::out | ios::trunc);
-     }
-
     // escrevendo no arquivo de saída
     string ans;
-    if(programas > 2 || flag_extern){
-        ans+="USO\n";
+
+    // arquivo de saída em binário que não vai ser ligado
+    if(flag_extern || flag_public || flag_begin || flag_end){
+        outFile.open(filename + ".obj", ios::out | ios::trunc);
+        ans += "USO\n";
         for(auto [lab, vec] : tabUso){
-            for(auto aux : vec){
-                ans+= lab + " " + to_string(aux) + "\n";
+            for(auto endereco : vec){
+                ans += lab + " " + to_string(endereco) + "\n";
             }
         }
-        ans+="DEF\n";
-        for(auto [lab, vec] : tabDef){
-            for(auto aux : vec){
-                ans+= lab + " " + to_string(aux) + "\n";
-            }
+
+        ans += "DEF\n";
+        for(auto [lab, endereco] : tabDef){
+            ans += lab + " " + to_string(endereco) + "\n";
         }
-        ans+="RELATIVOS\n";
-        for(auto vec : relativos){
-            ans+= to_string(vec) + " ";
+
+        ans += "RELATIVOS\n";
+        for(auto endereco : relativos){
+            ans+= to_string(endereco) + " ";
         }
         ans+="\nCODE\n";
     }
+    else{
+        outFile.open(filename + ".exc", ios::out | ios::trunc);
+    }
+
     for(auto i : mem) ans += to_string(i) + " ";
+
     if (outFile.is_open()) {
         outFile << ans << '\n';
     }
@@ -596,15 +551,16 @@ int32_t main(int argc, char** argv) {
 
     // adquirindo o nome dos arquivos passados como argumento no terminal, 
     // preprocessando e montando esses arquivos
+
     for(int i=1; i<argc; i++) {
         string filename = argv[i];
         preprocess(filename);
-        if ( !assemble(filename,argc) )
-            cout << "Falha na Montagem do Arquivo" << filename << endl;
+        if ( !assemble(filename) )
+            cout << "Falha na Montagem do Arquivo {" << filename << "}" << endl;
     }
 
     //Trocar >= por > para teste
-    if(argc >= 2){
-        linker(argv[1]);
-    }
+    // if(argc >= 2){
+    //     linker(argv[1]);
+    // }
 }
