@@ -13,16 +13,20 @@ unordered_map<string, pair<int, int>> tabInstr;
 unordered_map<string, int> tabDiret;
 
 // Tabela de Simbolos
-// "label" -> {linha}
+// "label" -> {endereço}
+// endereço == -1 -> (label externo)
 unordered_map<string, int> tabSimb;
 
 // Pendências da Tabela de Simbolos
-unordered_map<string, vector<int>> tabPend;
+// "label" -> vector{endereço, linha}
+unordered_map<string, vector<pair<int, int>>> tabPend;
 
 //Tabela de Definições
-unordered_map<string, vector<int>> tabDef;
+// "label" -> {endereço}
+unordered_map<string, int> tabDef;
 
 //Tabela de Uso
+// "label" -> vector{endereço}
 unordered_map<string, vector<int>> tabUso;
 
 static inline void trim(string &s) {
@@ -134,7 +138,6 @@ void preprocess(string filename) {
     }
 
     // cuidando da diretiva SECTION
-    
     int secDataLine = -1, secTextLine = -1;
     int file_sz = (int) fileVec.size();
     
@@ -349,7 +352,7 @@ bool assemble(string filename, int programas) {
 
                     string arg = lineVec[1];
                     tabUso[arg] = vector<int>();
-                    tabSimb[arg] = -1;
+                    tabSimb[arg] = -1; // label externo 
                     flag_extern = 1;
 
                     if(flag_begin) 
@@ -363,7 +366,7 @@ bool assemble(string filename, int programas) {
                     }
 
                     string arg = lineVec[1];
-                    tabDef[arg] = vector<int>();
+                    tabDef[arg] = lineCounter; // inicializando todos os labels externos 
                     flag_public = 1;
                     if(flag_begin) 
                         printf("WARNING: (Erro Semantico) na linha %d, sem BEGIN\n", lineCounter);
@@ -380,7 +383,7 @@ bool assemble(string filename, int programas) {
 
                 //int ejmp = 0; // ? 
 
-                // adiciona linha a lista de pendencias
+                // adiciona os argumentos dessa linha na lista de pendencias
                 for(int i=1; i<argSize; i++) {
                     string arg = lineVec[i];
 
@@ -391,9 +394,9 @@ bool assemble(string filename, int programas) {
                     mem.push_back(-1); 
 
                     // caso o vetor de pendencias desse label nao esteja inicializado
-                    if (!tabPend.count(arg)) tabPend[arg] = vector<int>();
+                    if (!tabPend.count(arg)) tabPend[arg] = vector<pair<int, int>>();
 
-                    tabPend[arg].push_back(addressCounter);
+                    tabPend[arg].push_back({addressCounter, lineCounter});
                     relativos.push_back(addressCounter);
 
                     // tabPend[arg].push_back(lineCounter);
@@ -417,33 +420,82 @@ bool assemble(string filename, int programas) {
         if (flag_begin or flag_extern or flag_public)
             printf("WARNING: (Erro Semantico) na linha %d, sem END\n", lineCounter);
 
-    // Arruma todas as pendências (continuar verificando daqui)
+    // Arruma todas as pendências da tabUso e tabPend
     for(auto [lab, vec] : tabPend) {
-        int flag_erro = 0;
-        int flag_idx = 0;
-        for(auto idx : vec) {
-            flag_idx++;
-            if(flag_idx == 1){
-                mem[idx] = tabSimb[lab];
-                if(tabDef.count(lab)){tabDef[lab].push_back(tabSimb[lab]);}
 
-                if(tabUso.count(lab)){tabUso[lab].push_back(idx);}
+        for(auto [addressIdx, lineIdx] : vec) {
+
+            // rotulo nunca definido (nem internamente, nem externamente)
+            if (!tabSimb.count(lab)) {
+                printf("ERROR: (Erro Semantico) na linha %d. Rotulo nao definido.\n", lineIdx);
+                return false;
             }
 
-            if(flag_idx == 3){
-                flag_idx = 0;
+            // rotulo externo
+            if (tabSimb[lab] == -1) {
+                tabUso[lab].push_back(addressIdx);
             }
 
-            if(tabSimb[lab] == 0 && vec[2] == 0 && flag_erro == 0){
-                printf("Erro Semantico, dado nao definido na linha %d\n", vec[1]);
-                flag_erro = 1;
-            }
-            if(tabSimb[lab] == 0 && vec[2] == 1 && flag_erro == 0){
-                printf("Erro Semantico, label nao definido na linha %d\n", vec[1]);
-                flag_erro = 1;
+            // rotulo interno
+            else {
+                mem[addressIdx] = tabSimb[lab];
             }
         }
 
+        for(auto [addressIdx, lineIdx] : vec) {
+
+            // rotulo nunca definido (nem internamente, nem externamente)
+            if (!tabSimb.count(lab)) {
+                printf("ERROR: (Erro Semantico) na linha %d. Rotulo nao definido.\n", lineIdx);
+                return false;
+            }
+
+            // rotulo externo
+            if (tabSimb[lab] == -1) {
+                tabUso[lab].push_back(addressIdx);
+            }
+
+            // rotulo interno
+            else {
+                mem[addressIdx] = tabSimb[lab];
+            }
+        }
+        // int flag_erro = 0;
+        // int flag_idx = 0;
+        // for(auto idx : vec) {
+        //     flag_idx++;
+        //     if(flag_idx == 1){
+        //         mem[idx] = tabSimb[lab];
+        //         if(tabDef.count(lab)){tabDef[lab].push_back(tabSimb[lab]);}
+
+        //         if(tabUso.count(lab)){tabUso[lab].push_back(idx);}
+        //     }
+
+        //     if(flag_idx == 3){
+        //         flag_idx = 0;
+        //     }
+
+        //     if(tabSimb[lab] == 0 && vec[2] == 0 && flag_erro == 0){
+        //         printf("Erro Semantico, dado nao definido na linha %d\n", vec[1]);
+        //         flag_erro = 1;
+        //     }
+        //     if(tabSimb[lab] == 0 && vec[2] == 1 && flag_erro == 0){
+        //         printf("Erro Semantico, label nao definido na linha %d\n", vec[1]);
+        //         flag_erro = 1;
+        //     }
+        // }
+
+    }
+
+    // Configurando os endereços da tabela de definiçoes
+    for(auto [lab, lineIdx] : tabDef) {
+
+        if (!tabSimb.count(lab)) {
+            printf("ERROR: (Erro Semantico) na linha %d. Dado nao definido.\n", lineIdx);
+            return false;
+        }
+
+        tabDef[lab] = tabSimb[lab];
     }
 
     // arquivo de saída em binário que não vai ser ligado
