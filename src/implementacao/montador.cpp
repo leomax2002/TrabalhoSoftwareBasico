@@ -551,12 +551,16 @@ int32_t main(int argc, char** argv) {
 
     // adquirindo o nome dos arquivos passados como argumento no terminal, 
     // preprocessando e montando esses arquivos
-
     for(int i=1; i<argc; i++) {
         string filename = argv[i];
+
+        cout << "Preprocessando Arquivo {" << filename << "} ..." << endl;
         preprocess(filename);
+
+        cout << "Montando Arquivo {" << filename << "} ..." << endl;
+        
         if ( !assemble(filename) )
-            cout << "Falha na Montagem do Arquivo {" << filename << "}" << endl;
+            cout << "Falha na Montagem do Arquivo {" << filename << "} !" << endl;
     }
 
     //Trocar >= por > para teste
