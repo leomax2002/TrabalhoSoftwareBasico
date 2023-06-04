@@ -100,7 +100,7 @@ void preprocess(string filename) {
                 if (word != ",")
                     line += word + " ";
             }
-            
+
             // unindo " :" aos rótulos
             auto pos3 = line.find(" :");
             if (pos3 != string::npos) line.erase(pos3, 1);
@@ -111,11 +111,22 @@ void preprocess(string filename) {
             // retirando ':' de "Extern:" e "Public:"
             stringstream ss2(line);
             line = "";
+            int hexdex;
+            //int hexdex;
             while(ss2 >> word) {
-                if (word == "EXTERN:" or word == "PUBLIC:")
+                if (word == "EXTERN:" or word == "PUBLIC:"){
                     line += word.substr(0, word.size()-1) + " ";
-                else
-                    line += word + " ";
+                }
+                else{
+                    if(word.substr(0,2) == "0X"){
+                        std::istringstream(word) >> std::hex >> hexdex;
+                        //cout << "hex" << word_hexdex << endl;
+                        line+= to_string(hexdex) + " ";
+                    }
+                    else{
+                        line += word + " ";
+                    }
+                }
             }
 
             // unindo linhas diferentes que são do mesmo rótulo
@@ -140,7 +151,7 @@ void preprocess(string filename) {
     // cuidando da diretiva SECTION
     int secDataLine = -1, secTextLine = -1;
     int file_sz = (int) fileVec.size();
-    
+
     for(int i=0; i<file_sz; i++) {
         line = fileVec[i];
 
@@ -167,11 +178,11 @@ void preprocess(string filename) {
     // cout << "text = " << secTextLine << " data = " << secDataLine << endl;
 
     vector<string> fileVec2;
-    
+
     if (secTextLine == -1) {
         // Nao tem SECTION TEXT -> erro sintático? (colocar isso)
         cout << "WARNING: Faltando SECTION TEXT" << endl;
-        
+
         // Talvez de ainda para montar o arquivo, portanto:
         // removendo a linha de SECTION DATA, caso tenha.
         for(int i=0; i<file_sz; i++) {
@@ -208,20 +219,20 @@ void preprocess(string filename) {
             // copiando cabeçalho
             for(int i=0; i<secDataLine; i++)
                 fileVec2.push_back(fileVec[i]);
-            
+
             // copiando TEXT
             for(int i=secTextLine+1; i<file_sz; i++)
                 fileVec2.push_back(fileVec[i]);
-            
+
             // copiando DATA
             for(int i=secDataLine+1; i<secTextLine; i++)
                 fileVec2.push_back(fileVec[i]);
         }
     }
-    
-    for(auto str : fileVec2) 
+
+    for(auto str : fileVec2)
         auxFile << str;
-    
+
     inFile.close();
     auxFile.close();
 }
@@ -265,7 +276,7 @@ bool assemble(string filename) {
 
     // Contador as linhas para exibir nas mensagens de erro
     int lineCounter = 1; // indexado em 1
-    
+
     // Flags para verificar se existe e quantos existem: BEGIN e END
     int flag_begin = 0;
     int flag_end = 0;
@@ -279,7 +290,7 @@ bool assemble(string filename) {
 
     if (auxFile.is_open()) {
         while ( getline(auxFile, line)) {
-            
+
             // tokenizando a linha em palavras
             stringstream ss(line);
             string word;
@@ -317,7 +328,7 @@ bool assemble(string filename) {
                 if (instruction == "SPACE") {
 
                     // TODO: Implementar caso em que ha argumentos passados para SPACE
-    
+
                     mem.push_back(0);
                     tipoDado.insert({label});
                     addressCounter += 1;
@@ -326,7 +337,7 @@ bool assemble(string filename) {
                 else if (instruction == "CONST") {
                     if (lineVec.size() < 2) {
                         cout << "ERROR: (Erro Sintatico) na linha " << lineCounter << ". Instrucao CONST nao possui argumento." << endl;
-                        return false;
+                        //return false;
                     }
                     mem.push_back( stoi(lineVec[1]) );
                     tipoDado.insert({label});
@@ -350,29 +361,29 @@ bool assemble(string filename) {
                 else if (instruction == "EXTERN") {
                     if (lineVec.size() < 2) {
                         cout << "ERROR: (Erro Sintatico) na linha " << lineCounter << ". Instrucao EXTERN nao possui argumento"  << endl;
-                        return false;
+                        //return false;
                     }
 
                     string arg = lineVec[1];
                     tabUso[arg] = vector<int>();
-                    tabSimb[arg] = -1; // label externo 
+                    tabSimb[arg] = -1; // label externo
                     flag_extern = 1;
 
-                    if(!flag_begin) 
+                    if(!flag_begin)
                         printf("WARNING: (Erro Semantico) na linha %d, sem BEGIN\n", lineCounter);
                 }
 
                 else if (instruction == "PUBLIC") {
                     if (lineVec.size() < 2) {
                         cout << "ERROR: (Erro Sintatico) na linha " << lineCounter << ". Instrucao PUBLIC nao possui argumento"  << endl;
-                        return false;
+                        //return false;
                     }
 
                     string arg = lineVec[1];
                     // inicializando todos os labels externos com o contador de linha caso precise
-                    tabDef[arg] = lineCounter; 
+                    tabDef[arg] = lineCounter;
                     flag_public = 1;
-                    if(!flag_begin) 
+                    if(!flag_begin)
                         printf("WARNING: (Erro Semantico) na linha %d, sem BEGIN\n", lineCounter);
                 }
 
@@ -393,7 +404,7 @@ bool assemble(string filename) {
                     scanner(arg, lineCounter);
 
                     // adiciona pendencia
-                    mem.push_back(-1); 
+                    mem.push_back(-1);
 
                     // caso o vetor de pendencias desse label nao esteja inicializado
                     if (!tabPend.count(arg)) tabPend[arg] = vector<pair<int, int>>();
@@ -424,7 +435,7 @@ bool assemble(string filename) {
                     printf("ERROR: (Erro Semantico) na linha %d. Rotulo de Dado nao definido.\n", lineIdx);
                 else
                     printf("ERROR: (Erro Semantico) na linha %d. Rotulo de Endereço nao definido.\n", lineIdx);
-                return false;
+                //return false;
             }
 
             // rotulo externo
@@ -447,7 +458,7 @@ bool assemble(string filename) {
                 printf("ERROR: (Erro Semantico) na linha %d. Rotulo de Dado nao definido.\n", lineIdx);
             else
                 printf("ERROR: (Erro Semantico) na linha %d. Rotulo de Endereço nao definido.\n", lineIdx);
-            return false;
+            //return false;
         }
 
         tabDef[lab] = tabSimb[lab];
@@ -491,56 +502,124 @@ bool assemble(string filename) {
     outFile.close();
 
     // nao houve problemas para montar
-    return true; 
+    return true;
 }
 
-void linker(string obj1, string obj2 = "", string obj3 = "", string obj4 = ""){
-    fstream outFile, auxFile1,auxFile2,auxFile3,auxFile4;
+void linker(vector<string> objs){
+    fstream outFile, auxFile;
     string line;
-    //Variáveis Auxiliares
+    //Tamanho Objs
+    int tamanho_objs = objs.size();
+    //Flags
     int fator_correcao = 0;
     int proximo_uso = 0;
     int proximo_def = 0;
+    int proximo_relativo = 0;
     int proximo_codigo = 0;
-    auxFile1.open(obj1 + ".obj", ios::in);
+    //Variáveis Auxiliares
+    string arg;
+    string resp = "";
+    vector<int> cod_ligado;
+    //Tabela Geral de Definições e Tabela de Uso
+    unordered_map<string, int> tab_ger_def;
+    unordered_map<string,vector<int>> tab_uso;
+    vector<int> relativos;
+    //Código
 
-    unordered_map<string, int> tgs;
-    unordered_map<string,vector<int>> t_uso;
-    if (auxFile1.is_open()) {
+    //Arruma Tabelas
+    for(int i = 0; i < tamanho_objs;i++){
+        string obj = objs[i];
+        relativos.clear();
+        auxFile.open(obj+".obj",ios::in);
 
-        while ( getline(auxFile1, line)) {
-
-            stringstream ss(line);
-            string word;
-            vector<string> lineVec;
-            while(ss >> word) lineVec.push_back(word);
-            if(lineVec[0] == "USO"){proximo_uso = 1;}
-            else if(lineVec[0] == "DEF"){proximo_def = 1;}
-            else if(lineVec[0] == "CODE"){proximo_codigo = 1;}
-
-            if(proximo_uso){
-                string arg = lineVec[0];
-                int val_uso = stoi(lineVec[1]) + fator_correcao;
-                if (!t_uso.count(arg)) t_uso[arg] = vector<int>();
-                t_uso[arg].push_back(val_uso);
-                proximo_uso = 0;
+        if(auxFile.is_open()){
+            while( getline(auxFile,line) ){
+                stringstream ss(line);
+                string word;
+                vector<string> lineVec;
+                while(ss >> word) lineVec.push_back(word);
+            if(lineVec[0] == "USO") {
+                       proximo_uso = 1;
+                       proximo_def = 0;
+                       proximo_relativo = 0;
+                       proximo_codigo = 0;
             }
-            if(proximo_def){
-                string arg = lineVec[0];
-                int val_uso = stoi(lineVec[1]) + fator_correcao;
-                tgs[arg] = val_uso;
-                proximo_def = 0;
-            }
-            if(proximo_codigo){
-                    fator_correcao = lineVec.size();
+                if(lineVec[0] == "DEF") {
+                       proximo_uso = 0;
+                       proximo_def = 1;
+                       proximo_relativo = 0;
+                       proximo_codigo = 0;
+                }
+                if(lineVec[0] == "CODE"){
+                       proximo_uso = 0;
+                       proximo_def = 0;
+                       proximo_relativo = 0;
+                       proximo_codigo = 1;
+                }
+                if(lineVec[0] == "RELATIVOS"){
+                    proximo_uso = 0;
+                    proximo_def = 0;
+                    proximo_relativo = 1;
                     proximo_codigo = 0;
+                }
+                if(proximo_uso && lineVec[0] != "USO" && lineVec[0] != "DEF" && lineVec[0] != "CODE"){
+                   arg = lineVec[0];
+                   int val_uso = stoi(lineVec[1]) + fator_correcao;
+                   if (!tab_uso.count(arg)) tab_uso[arg] = vector<int>();
+                   tab_uso[arg].push_back(val_uso);
+            }
+            if(proximo_def && lineVec[0] != "USO" && lineVec[0] != "DEF" && lineVec[0] != "CODE" && lineVec[0] != "RELATIVOS"){
+                string arg = lineVec[0];
+                int val_uso = stoi(lineVec[1]) + fator_correcao;
+                tab_ger_def[arg] = val_uso;
             }
 
+            if(proximo_relativo && lineVec[0] != "USO" && lineVec[0] != "DEF" && lineVec[0] != "CODE" && lineVec[0] != "RELATIVOS"){
+                for(int i = 0; i < lineVec.size();i++){
+                    int id_rel = stoi(lineVec[i]);
+                    relativos.push_back(id_rel);
+                }
+
+            }
+            if(proximo_codigo && lineVec[0] != "USO" && lineVec[0] != "DEF" && lineVec[0] != "CODE" && lineVec[0] != "RELATIVOS"){
+                    proximo_codigo = 0;
+                    int contador_pos_cod = 0;
+                    for(int i = 0; i < lineVec.size(); i++){
+                        int id = stoi(lineVec[i]);
+                        auto it = find(relativos.begin(), relativos.end(), contador_pos_cod);
+                        if(it != relativos.end()) id+=fator_correcao;
+                        cod_ligado.push_back(id);
+                        contador_pos_cod++;
+                    }
+                    fator_correcao = lineVec.size();
+            }
+
+            }
 
         }
-
+        auxFile.close();
     }
-    auxFile1.close();
+
+    //Resolve relativos
+    //for(auto [lab, vec])
+    for(auto [lab, vec] : tab_uso) {
+
+        for(auto idx : vec){
+
+            cod_ligado[idx] = tab_ger_def[lab];
+        }
+}
+
+    outFile.open(objs[0] + ".exc", ios::out | ios::trunc);
+    for(auto i : cod_ligado) resp += to_string(i) + " ";
+
+        if (outFile.is_open()) {
+            outFile << resp << '\n';
+        }
+
+    outFile.close();
+
+
 }
 
 
@@ -548,23 +627,25 @@ int32_t main(int argc, char** argv) {
 
     // inicializa a tabela de instruções e a de diretivas
     init_fixed_tables();
+    vector<string> files;
 
-    // adquirindo o nome dos arquivos passados como argumento no terminal, 
+    // adquirindo o nome dos arquivos passados como argumento no terminal,
     // preprocessando e montando esses arquivos
     for(int i=1; i<argc; i++) {
         string filename = argv[i];
-
+        files.push_back(filename);
         cout << "Preprocessando Arquivo {" << filename << "} ..." << endl;
         preprocess(filename);
 
         cout << "Montando Arquivo {" << filename << "} ..." << endl;
-        
+
         if ( !assemble(filename) )
             cout << "Falha na Montagem do Arquivo {" << filename << "} !" << endl;
     }
 
-    //Trocar >= por > para teste
-    // if(argc >= 2){
-    //     linker(argv[1]);
-    // }
+
+    if(argc >=2){
+        linker(files);
+    }
+
 }
