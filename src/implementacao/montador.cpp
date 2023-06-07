@@ -15,7 +15,7 @@ unordered_map<string, int> tabDiret;
 // Tabela de Simbolos
 // "label" -> {endereço}
 // endereço == -1 -> (label externo)
-unordered_map<string, int> tabSimb;
+unordered_map<string, vector<int>> tabSimb;
 
 // Pendências da Tabela de Simbolos
 // "label" -> vector{endereço, linha}
@@ -254,6 +254,17 @@ void scanner(string token, int lineCounter){
     }
 }
 
+bool isNum(string token){
+    int sz = (int) token.size();
+    for(int i=0; i<sz; i++) {
+        // verifica se todos os caracteres são apenas: letras, underscores ou números
+        if ( !isdigit(token[i]) ) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool assemble(string filename) {
     fstream outFile, auxFile;
 
@@ -267,6 +278,8 @@ bool assemble(string filename) {
     tabDef.clear();
 
     vector<int> mem;
+    //Fator de Correção para Argumentos do tipo X+2
+    vector<int> fat_correc;
     vector<int> relativos;
     set<string> tipoDado; // se um label é de dado, em vez de endereço
     string line;
@@ -301,7 +314,9 @@ bool assemble(string filename) {
             // essa linha possui rótulo
             if (lineVec[0].back() == ':') {
                 label = lineVec[0].substr(0, lineVec[0].size()-1);
-                tabSimb[label] = addressCounter;
+                //cout << "label " << label << endl;
+                tabSimb[label].push_back(addressCounter);
+                //cout << tabSimb[label][0] << endl;
                 lineVec.erase(lineVec.begin());
 
                 //Incrementa extraLabelCounter, verificando se há mais de um rótulo na linha
@@ -328,8 +343,18 @@ bool assemble(string filename) {
                 if (instruction == "SPACE") {
 
                     // TODO: Implementar caso em que ha argumentos passados para SPACE
+                    if(lineVec.size() > 1){
+                            int n_args_const = stoi(lineVec[1])-1;
+                            for(int j = 0; j < n_args_const;j++){
+                                mem.push_back(0);
+                                fat_correc.push_back(0);
+                                addressCounter+=1;
+                                tabSimb[label].push_back(addressCounter);
+                            }
 
+                        }
                     mem.push_back(0);
+                    fat_correc.push_back(0);
                     tipoDado.insert({label});
                     addressCounter += 1;
                 }
@@ -340,13 +365,13 @@ bool assemble(string filename) {
                         //return false;
                     }
                     mem.push_back( stoi(lineVec[1]) );
+                    fat_correc.push_back(0);
                     tipoDado.insert({label});
                     addressCounter += 1;
                 }
 
                 else if (instruction == "BEGIN") {
                     flag_begin += 1;
-
                     if (flag_begin >= 2)
                         cout << "ERROR: (Erro Sintatico) na linha " << lineCounter << ". Mais de uma Instrucao BEGIN"  << endl;
                 }
@@ -366,7 +391,8 @@ bool assemble(string filename) {
 
                     string arg = lineVec[1];
                     tabUso[arg] = vector<int>();
-                    tabSimb[arg] = -1; // label externo
+                    tabSimb[arg] = vector<int>(); // label externo
+                    tabSimb[arg].push_back(-1);
                     flag_extern = 1;
 
                     if(!flag_begin)
@@ -393,18 +419,30 @@ bool assemble(string filename) {
             else {
                 // coloca o opcode na memória
                 mem.push_back(tabInstr[instruction].first);
+                fat_correc.push_back(0);
                 addressCounter += 1;
                 int argSize = tabInstr[instruction].second;
+                int ind_interno_vec = 0;
+                int argumentos = 0;
 
                 // adiciona os argumentos dessa linha na lista de pendencias
-                for(int i=1; i<argSize; i++) {
+                for(int i=1; i<lineVec.size(); i++) {
                     string arg = lineVec[i];
 
+                    if(lineVec[i-1] == "+" && isNum(arg)){
+                        ind_interno_vec = stoi(lineVec[i]);
+                        fat_correc[addressCounter-1] = ind_interno_vec;
+                        //cout << "address +" << addressCounter - 1;
+                    }
+                    else if(lineVec[i] != "+"){
+                    //cout << "arg " << arg << endl;
+                    //cout << lineVec;
                     //Analisador Léxico
                     scanner(arg, lineCounter);
 
                     // adiciona pendencia
                     mem.push_back(-1);
+                    fat_correc.push_back(0);
 
                     // caso o vetor de pendencias desse label nao esteja inicializado
                     if (!tabPend.count(arg)) tabPend[arg] = vector<pair<int, int>>();
@@ -415,6 +453,12 @@ bool assemble(string filename) {
                     relativos.push_back(addressCounter);
 
                     addressCounter += 1;
+                    ind_interno_vec = 0;
+                    if(argumentos == argSize){
+                        break;
+                    }
+                    argumentos+=1;
+                    }
                 }
             }
             lineCounter++;
@@ -439,17 +483,20 @@ bool assemble(string filename) {
             }
 
             // rotulo externo
-            if (tabSimb[lab] == -1) {
+            if (tabSimb[lab][0] == -1) {
                 tabUso[lab].push_back(addressIdx);
+                mem[addressIdx] = fat_correc[addressIdx];
             }
 
             // rotulo interno
             else {
-                mem[addressIdx] = tabSimb[lab];
+                int correc = fat_correc[addressIdx];
+                mem[addressIdx] = tabSimb[lab][correc];
             }
         }
     }
 
+    //for(auto i : fat_correc) cout << "fat_correc" << i << endl;
     // Configurando os endereços da tabela de definiçoes
     for(auto [lab, lineIdx] : tabDef) {
 
@@ -461,11 +508,11 @@ bool assemble(string filename) {
             //return false;
         }
 
-        tabDef[lab] = tabSimb[lab];
+        tabDef[lab] = tabSimb[lab][0];
     }
 
     // escrevendo no arquivo de saída
-    string ans;
+    string ans = "";
 
     // arquivo de saída em binário que não vai ser ligado
     if(flag_extern || flag_public || flag_begin || flag_end){
@@ -520,6 +567,7 @@ void linker(vector<string> objs){
     string arg;
     string resp = "";
     vector<int> cod_ligado;
+    vector<int> mem_aux;
     //Tabela Geral de Definições e Tabela de Uso
     unordered_map<string, int> tab_ger_def;
     unordered_map<string,vector<int>> tab_uso;
@@ -586,6 +634,7 @@ void linker(vector<string> objs){
                     int contador_pos_cod = 0;
                     for(int i = 0; i < lineVec.size(); i++){
                         int id = stoi(lineVec[i]);
+                        mem_aux.push_back(id);
                         auto it = find(relativos.begin(), relativos.end(), contador_pos_cod);
                         if(it != relativos.end()) id+=fator_correcao;
                         cod_ligado.push_back(id);
@@ -606,7 +655,7 @@ void linker(vector<string> objs){
 
         for(auto idx : vec){
 
-            cod_ligado[idx] = tab_ger_def[lab];
+            cod_ligado[idx] = tab_ger_def[lab] + mem_aux[idx];
         }
 }
 
@@ -644,7 +693,7 @@ int32_t main(int argc, char** argv) {
     }
 
 
-    if(argc >=2){
+    if(argc >= 2){
         linker(files);
     }
 
