@@ -15,7 +15,7 @@ unordered_map<string, int> tabDiret;
 // Tabela de Simbolos
 // "label" -> {endereço}
 // endereço == -1 -> (label externo)
-unordered_map<string, vector<int>> tabSimb;
+unordered_map<string, int> tabSimb;
 
 // Pendências da Tabela de Simbolos
 // "label" -> vector{endereço, linha}
@@ -112,7 +112,7 @@ void preprocess(string filename) {
             // "trim", removendo espaços no fim e começo
             trim(line);
 
-            // retirando ':' de "Extern:" e "Public:"
+            // retirando ':' de "Extern:" e "Public:" e tratando Hex
             stringstream ss2(line);
             line = "";
             int hexdex;
@@ -125,7 +125,7 @@ void preprocess(string filename) {
                     if(word.substr(0,2) == "0X"){
                         std::istringstream(word) >> std::hex >> hexdex;
                         //cout << "hex" << word_hexdex << endl;
-                        line+= to_string(hexdex) + " ";
+                        line += to_string(hexdex) + " ";
                     }
                     else{
                         line += word + " ";
@@ -177,9 +177,6 @@ void preprocess(string filename) {
             j += 1;
         }
     }
-
-    // debbugging:
-    // cout << "text = " << secTextLine << " data = " << secDataLine << endl;
 
     vector<string> fileVec2;
 
@@ -323,9 +320,7 @@ bool assemble(string filename) {
             // essa linha possui rótulo
             if (lineVec[0].back() == ':') {
                 label = lineVec[0].substr(0, lineVec[0].size()-1);
-                //cout << "label " << label << endl;
-                tabSimb[label].push_back(addressCounter);
-                //cout << tabSimb[label][0] << endl;
+                tabSimb[label] = addressCounter;
                 lineVec.erase(lineVec.begin());
 
                 //Incrementa extraLabelCounter, verificando se há mais de um rótulo na linha
@@ -362,7 +357,6 @@ bool assemble(string filename) {
                             mem.push_back(0);
                             fator_offset.push_back(0);
                             addressCounter+=1;
-                            tabSimb[label].push_back(addressCounter);
                         }
 
                     }
@@ -378,7 +372,7 @@ bool assemble(string filename) {
                         
                         no_major_errors_flag = false;
                         // considererar então o argumento == 0
-                        // lineVec[1]
+                        // lineVec[1] = 0
                         lineVec.push_back("0");
                     }
                     mem.push_back( stoi(lineVec[1]) );
@@ -414,8 +408,7 @@ bool assemble(string filename) {
 
                     string arg = lineVec[1];
                     tabUso[arg] = vector<int>();
-                    tabSimb[arg] = vector<int>(); // label externo
-                    tabSimb[arg].push_back(-1);
+                    tabSimb[arg] = -1; // label externo
                     flag_extern = 1;
 
                     if(!flag_begin)
@@ -506,24 +499,21 @@ bool assemble(string filename) {
                 
                 no_major_errors_flag = false;
                 // gerar o valor de 0 então para esse rótulo para poder compilar
-                // tabSimb[lab] = 0;
+                tabSimb[lab] = 0;
             }
 
             // rotulo externo
-            if (tabSimb[lab][0] == -1) {
+            if (tabSimb[lab] == -1) {
                 tabUso[lab].push_back(addressIdx);
-                mem[addressIdx] = fator_offset[addressIdx];
+                mem[addressIdx] = fator_offset[addressIdx];;
             }
 
             // rotulo interno
             else {
-                int correc = fator_offset[addressIdx];
-                mem[addressIdx] = tabSimb[lab][correc];
+                mem[addressIdx] = tabSimb[lab] + fator_offset[addressIdx];
             }
         }
     }
-
-    //for(auto i : fator_offset) cout << "fator_offset" << i << endl;
 
     // Configurando os endereços da tabela de definiçoes
     for(auto [lab, lineIdx] : tabDef) {
@@ -536,10 +526,10 @@ bool assemble(string filename) {
             
             no_major_errors_flag = false;
             // gerar o valor de 0 então para esse rótulo para poder compilar
-            // tabSimb[lab] = 0;
+            tabSimb[lab] = 0;
         }
 
-        tabDef[lab] = tabSimb[lab][0];
+        tabDef[lab] = tabSimb[lab];
     }
 
     // string de todo o arquivo de saída
@@ -590,14 +580,17 @@ bool assemble(string filename) {
 void linker(vector<string> objs){
     fstream outFile, auxFile;
     string line;
-    //Tamanho Objs
-    int tamanho_objs = objs.size();
-    //Flags
+
+    // Tamanho Objs
+    int tamanho_objs = (int) objs.size();
+
+    // Flags
     int fator_correcao = 0;
     int proximo_uso = 0;
     int proximo_def = 0;
     int proximo_relativo = 0;
     int proximo_codigo = 0;
+
     //Variáveis Auxiliares
     string arg;
     string resp = "";
@@ -658,7 +651,7 @@ void linker(vector<string> objs){
             }
 
             if(proximo_relativo && lineVec[0] != "USO" && lineVec[0] != "DEF" && lineVec[0] != "CODE" && lineVec[0] != "RELATIVOS"){
-                for(int i = 0; i < lineVec.size();i++){
+                for(int i = 0; i < (int)lineVec.size();i++){
                     int id_rel = stoi(lineVec[i]);
                     relativos.push_back(id_rel);
                 }
@@ -667,7 +660,7 @@ void linker(vector<string> objs){
             if(proximo_codigo && lineVec[0] != "USO" && lineVec[0] != "DEF" && lineVec[0] != "CODE" && lineVec[0] != "RELATIVOS"){
                     proximo_codigo = 0;
                     int contador_pos_cod = 0;
-                    for(int i = 0; i < lineVec.size(); i++){
+                    for(int i = 0; i < (int)lineVec.size(); i++){
                         int id = stoi(lineVec[i]);
                         mem_aux.push_back(id);
                         auto it = find(relativos.begin(), relativos.end(), contador_pos_cod);
@@ -675,7 +668,7 @@ void linker(vector<string> objs){
                         cod_ligado.push_back(id);
                         contador_pos_cod++;
                     }
-                    fator_correcao = lineVec.size();
+                    fator_correcao = (int) lineVec.size();
             }
 
             }

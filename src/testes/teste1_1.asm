@@ -3,7 +3,8 @@
 SECTION TEXT
 INPUT OLD_DATA
 load old_Data ; minusculo
-L1: DIV DOIS
+L1: 
+DIV DOIS
 STORE  NEW_DATA
 MUL DOIS
     STORE TMP_DATA ; tabulação
@@ -17,7 +18,7 @@ JMPP L1
 STOP               ; espaços no fim
 
 SECTION DATA
-DOIS  :        CONST 2 ; tem que juntar ':' com o rótulo
+DOIS  :        CONST 0X2 ; tem que juntar ':' com o rótulo
 OLD_DATA:SPACE
 NEW_DATA: 
 SPACE ; faz parte do label de cima
