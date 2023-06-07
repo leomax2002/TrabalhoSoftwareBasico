@@ -78,6 +78,10 @@ void preprocess(string filename) {
     // Lendo arquivo de entrada e limpando formatação
     if (inFile.is_open()) {
         while ( getline(inFile, line)) {
+
+            // pula linhas com apenas '\n', que é removido pelo getline
+            if (line == "") continue;
+
             // convertendo cada linha para upper case
             transform(line.begin(), line.end(), line.begin(), ::toupper);
 
@@ -136,10 +140,10 @@ void preprocess(string filename) {
             }
 
             // pula linhas com apenas '\n', que é removido pelo getline
-            if (line.empty()) continue;
+            if (line == "") continue;
 
             // salvando linha no arquivo intermediário
-            if (!label.empty()) { // se juntei linhas
+            if (label != "") { // se juntei linhas
                 fileVec.push_back(label + " " + line + '\n');
                 label = "";
             }
@@ -255,12 +259,9 @@ void scanner(string token, int lineCounter){
 }
 
 bool isNum(string token){
-    int sz = (int) token.size();
-    for(int i=0; i<sz; i++) {
-        // verifica se todos os caracteres são apenas: letras, underscores ou números
-        if ( !isdigit(token[i]) ) {
-            return false;
-        }
+    // verifica se todos os caracteres são apenas: números
+    for(char c : token) if (!isdigit(c)) {
+        return false;
     }
     return true;
 }
@@ -278,10 +279,15 @@ bool assemble(string filename) {
     tabDef.clear();
 
     vector<int> mem;
-    //Fator de Correção para Argumentos do tipo X+2
-    vector<int> fat_correc;
+    
+    //Fator de Offset para Argumentos do tipo X+2
+    vector<int> fator_offset;
+    
     vector<int> relativos;
-    set<string> tipoDado; // se um label é de dado, em vez de endereço
+    
+    // se um label é de dado, em vez de endereço
+    set<string> tipoDado; 
+    
     string line;
 
     // Contador do endereço de memória
@@ -300,6 +306,9 @@ bool assemble(string filename) {
 
     // Mais de um Rotulo na mesma linha
     int extraLabelCounter = 0;
+
+    // Flag para saber se o arquivo gerou um objeto corretamente
+    bool no_major_errors_flag = true;
 
     if (auxFile.is_open()) {
         while ( getline(auxFile, line)) {
@@ -325,9 +334,13 @@ bool assemble(string filename) {
                     if (str.back() == ':') extraLabelCounter += 1;
                     else aux.push_back(str);
                 }
+
                 if (extraLabelCounter > 0) {
                     printf("ERROR: (Erro Sintatico) na linha %d. Mais de um rotulo na mesma linha\n", lineCounter);
-                    // linha sem labels
+                    
+                    no_major_errors_flag = false;
+
+                    // aux armazena a linha sem labels
                     lineVec = aux;
                 }
 
@@ -342,19 +355,19 @@ bool assemble(string filename) {
 
                 if (instruction == "SPACE") {
 
-                    // TODO: Implementar caso em que ha argumentos passados para SPACE
+                    // SPACE possui argumento 
                     if(lineVec.size() > 1){
-                            int n_args_const = stoi(lineVec[1])-1;
-                            for(int j = 0; j < n_args_const;j++){
-                                mem.push_back(0);
-                                fat_correc.push_back(0);
-                                addressCounter+=1;
-                                tabSimb[label].push_back(addressCounter);
-                            }
-
+                        int n_args_space = stoi(lineVec[1])-1;
+                        for(int j = 0; j < n_args_space; j++){
+                            mem.push_back(0);
+                            fator_offset.push_back(0);
+                            addressCounter+=1;
+                            tabSimb[label].push_back(addressCounter);
                         }
+
+                    }
                     mem.push_back(0);
-                    fat_correc.push_back(0);
+                    fator_offset.push_back(0);
                     tipoDado.insert({label});
                     addressCounter += 1;
                 }
@@ -362,16 +375,22 @@ bool assemble(string filename) {
                 else if (instruction == "CONST") {
                     if (lineVec.size() < 2) {
                         cout << "ERROR: (Erro Sintatico) na linha " << lineCounter << ". Instrucao CONST nao possui argumento." << endl;
-                        //return false;
+                        
+                        no_major_errors_flag = false;
+                        // considererar então o argumento == 0
+                        // lineVec[1]
+                        lineVec.push_back("0");
                     }
                     mem.push_back( stoi(lineVec[1]) );
-                    fat_correc.push_back(0);
+                    fator_offset.push_back(0);
                     tipoDado.insert({label});
                     addressCounter += 1;
                 }
 
                 else if (instruction == "BEGIN") {
                     flag_begin += 1;
+
+                    // retirar aqui em baixo, tratamento de erro desnecessario
                     if (flag_begin >= 2)
                         cout << "ERROR: (Erro Sintatico) na linha " << lineCounter << ". Mais de uma Instrucao BEGIN"  << endl;
                 }
@@ -379,6 +398,7 @@ bool assemble(string filename) {
                 else if (instruction == "END") {
                     flag_end += 1;
 
+                    // retirar aqui em baixo, tratamento de erro desnecessario
                     if (flag_end >= 2)
                         cout << "ERROR: (Erro Sintatico) na linha " << lineCounter << ". Mais de uma Instrucao END"  << endl;
                 }
@@ -386,7 +406,10 @@ bool assemble(string filename) {
                 else if (instruction == "EXTERN") {
                     if (lineVec.size() < 2) {
                         cout << "ERROR: (Erro Sintatico) na linha " << lineCounter << ". Instrucao EXTERN nao possui argumento"  << endl;
-                        //return false;
+
+                        // faltou label -> criar um label "de erro"
+                        no_major_errors_flag = false;
+                        lineVec.push_back( "ERRO_FALTA_DE_LABEL_EXTERN" );
                     }
 
                     string arg = lineVec[1];
@@ -396,13 +419,16 @@ bool assemble(string filename) {
                     flag_extern = 1;
 
                     if(!flag_begin)
-                        printf("WARNING: (Erro Semantico) na linha %d, sem BEGIN\n", lineCounter);
+                        printf("WARNING: (Erro Semantico) na linha %d, Uso de EXTERN sem BEGIN\n", lineCounter);
                 }
 
                 else if (instruction == "PUBLIC") {
                     if (lineVec.size() < 2) {
                         cout << "ERROR: (Erro Sintatico) na linha " << lineCounter << ". Instrucao PUBLIC nao possui argumento"  << endl;
-                        //return false;
+                        
+                        // faltou label
+                        no_major_errors_flag = false;
+                        lineVec.push_back( "ERRO_FALTA_DE_LABEL_PUBLIC" );
                     }
 
                     string arg = lineVec[1];
@@ -410,7 +436,7 @@ bool assemble(string filename) {
                     tabDef[arg] = lineCounter;
                     flag_public = 1;
                     if(!flag_begin)
-                        printf("WARNING: (Erro Semantico) na linha %d, sem BEGIN\n", lineCounter);
+                        printf("WARNING: (Erro Semantico) na linha %d, Uso de PUBLIC sem BEGIN\n", lineCounter);
                 }
 
             }
@@ -419,45 +445,43 @@ bool assemble(string filename) {
             else {
                 // coloca o opcode na memória
                 mem.push_back(tabInstr[instruction].first);
-                fat_correc.push_back(0);
+                fator_offset.push_back(0);
                 addressCounter += 1;
                 int argSize = tabInstr[instruction].second;
-                int ind_interno_vec = 0;
                 int argumentos = 0;
 
                 // adiciona os argumentos dessa linha na lista de pendencias
-                for(int i=1; i<lineVec.size(); i++) {
+                for(int i=1; i<(int)lineVec.size(); i++) {
                     string arg = lineVec[i];
 
-                    if(lineVec[i-1] == "+" && isNum(arg)){
-                        ind_interno_vec = stoi(lineVec[i]);
-                        fat_correc[addressCounter-1] = ind_interno_vec;
-                        //cout << "address +" << addressCounter - 1;
+                    // É um deslocamento numérico ao label
+                    if(lineVec[i-1] == "+" and isNum(arg)){
+                        fator_offset[addressCounter-1] = stoi(arg);
                     }
+
+                    // É um label
                     else if(lineVec[i] != "+"){
-                    //cout << "arg " << arg << endl;
-                    //cout << lineVec;
-                    //Analisador Léxico
-                    scanner(arg, lineCounter);
 
-                    // adiciona pendencia
-                    mem.push_back(-1);
-                    fat_correc.push_back(0);
+                        //Analisador Léxico
+                        scanner(arg, lineCounter);
 
-                    // caso o vetor de pendencias desse label nao esteja inicializado
-                    if (!tabPend.count(arg)) tabPend[arg] = vector<pair<int, int>>();
+                        // caso o vetor de pendencias desse label nao esteja inicializado
+                        if (!tabPend.count(arg)) tabPend[arg] = vector<pair<int, int>>();
 
-                    tabPend[arg].push_back({addressCounter, lineCounter});
+                        tabPend[arg].push_back({addressCounter, lineCounter});
 
-                    // qualquer espaço de memória que não guarda opcode de alguma instrução
-                    relativos.push_back(addressCounter);
+                        // qualquer espaço de memória que não guarda opcode de alguma instrução
+                        relativos.push_back(addressCounter);
 
-                    addressCounter += 1;
-                    ind_interno_vec = 0;
-                    if(argumentos == argSize){
-                        break;
-                    }
-                    argumentos+=1;
+                        // adiciona pendencia
+                        mem.push_back(-1);
+                        fator_offset.push_back(0);
+                        addressCounter += 1;
+
+                        if(argumentos == argSize){
+                            break;
+                        }
+                        argumentos += 1;
                     }
                 }
             }
@@ -479,24 +503,28 @@ bool assemble(string filename) {
                     printf("ERROR: (Erro Semantico) na linha %d. Rotulo de Dado nao definido.\n", lineIdx);
                 else
                     printf("ERROR: (Erro Semantico) na linha %d. Rotulo de Endereço nao definido.\n", lineIdx);
-                //return false;
+                
+                no_major_errors_flag = false;
+                // gerar o valor de 0 então para esse rótulo para poder compilar
+                // tabSimb[lab] = 0;
             }
 
             // rotulo externo
             if (tabSimb[lab][0] == -1) {
                 tabUso[lab].push_back(addressIdx);
-                mem[addressIdx] = fat_correc[addressIdx];
+                mem[addressIdx] = fator_offset[addressIdx];
             }
 
             // rotulo interno
             else {
-                int correc = fat_correc[addressIdx];
+                int correc = fator_offset[addressIdx];
                 mem[addressIdx] = tabSimb[lab][correc];
             }
         }
     }
 
-    //for(auto i : fat_correc) cout << "fat_correc" << i << endl;
+    //for(auto i : fator_offset) cout << "fator_offset" << i << endl;
+
     // Configurando os endereços da tabela de definiçoes
     for(auto [lab, lineIdx] : tabDef) {
 
@@ -505,18 +533,22 @@ bool assemble(string filename) {
                 printf("ERROR: (Erro Semantico) na linha %d. Rotulo de Dado nao definido.\n", lineIdx);
             else
                 printf("ERROR: (Erro Semantico) na linha %d. Rotulo de Endereço nao definido.\n", lineIdx);
-            //return false;
+            
+            no_major_errors_flag = false;
+            // gerar o valor de 0 então para esse rótulo para poder compilar
+            // tabSimb[lab] = 0;
         }
 
         tabDef[lab] = tabSimb[lab][0];
     }
 
-    // escrevendo no arquivo de saída
+    // string de todo o arquivo de saída
     string ans = "";
 
-    // arquivo de saída em binário que não vai ser ligado
+    // arquivo de saída em .obj que vai ser ligado
     if(flag_extern || flag_public || flag_begin || flag_end){
         outFile.open(filename + ".obj", ios::out | ios::trunc);
+
         ans += "USO\n";
         for(auto [lab, vec] : tabUso){
             for(auto endereco : vec){
@@ -535,12 +567,15 @@ bool assemble(string filename) {
         }
         ans+="\nCODE\n";
     }
-    else{
+    // arquivo de saída em .exc que não vai ser ligado
+    else {
         outFile.open(filename + ".exc", ios::out | ios::trunc);
     }
 
+    // código binario
     for(auto i : mem) ans += to_string(i) + " ";
 
+    // escrevendo no arquivo de saída
     if (outFile.is_open()) {
         outFile << ans << '\n';
     }
@@ -549,7 +584,7 @@ bool assemble(string filename) {
     outFile.close();
 
     // nao houve problemas para montar
-    return true;
+    return no_major_errors_flag;
 }
 
 void linker(vector<string> objs){
@@ -671,7 +706,6 @@ void linker(vector<string> objs){
 
 }
 
-
 int32_t main(int argc, char** argv) {
 
     // inicializa a tabela de instruções e a de diretivas
@@ -689,11 +723,15 @@ int32_t main(int argc, char** argv) {
         cout << "Montando Arquivo {" << filename << "} ..." << endl;
 
         if ( !assemble(filename) )
-            cout << "Falha na Montagem do Arquivo {" << filename << "} !" << endl;
+            cout << "Arquivo {" << filename << "} foi montado com erros :-( " << endl;
+        else 
+            cout << "Arquivo {" << filename << "} foi montado sem erros :-) " << endl;
     }
 
 
-    if(argc >= 2){
+    if(argc >= 3) {
+        cout << "Mais de um arquivo passado como argumento" << endl;
+        cout << "Ligando arquivos..." << endl;
         linker(files);
     }
 
