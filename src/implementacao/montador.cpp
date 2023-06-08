@@ -695,8 +695,6 @@ void linker(vector<string> objs){
         }
 
     outFile.close();
-
-
 }
 
 int32_t main(int argc, char** argv) {
@@ -721,11 +719,9 @@ int32_t main(int argc, char** argv) {
             cout << "Arquivo {" << filename << "} foi montado sem erros :-) " << endl;
     }
 
-
-    if(argc >= 3) {
-        cout << "Mais de um arquivo passado como argumento" << endl;
-        cout << "Ligando arquivos..." << endl;
-        linker(files);
-    }
-
+    // if(argc >= 3) {
+    //     cout << "Mais de um arquivo passado como argumento" << endl;
+    //     cout << "Ligando arquivos..." << endl;
+    //     linker(files);
+    // }
 }
