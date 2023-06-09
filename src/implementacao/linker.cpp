@@ -134,4 +134,7 @@ int32_t main(int argc, char** argv) {
         cout << "Ligando arquivos..." << endl;
         linker(files);
     }
+    else {
+        cout << "Menos de 2 arquivos, não foi feito nenhuma ligação" << endl;
+    }
 }

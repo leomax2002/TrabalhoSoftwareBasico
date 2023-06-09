@@ -260,8 +260,8 @@ bool assemble(string filename) {
 
     vector<int> relativos;
 
-    // se um label é de dado, em vez de endereço
-    set<string> tipoDado;
+    // se um label é do tipo endereço, em vez de dado
+    set<string> tipoEndereco;
 
     string line;
 
@@ -303,24 +303,32 @@ bool assemble(string filename) {
             // essa linha possui rótulo
             if (lineVec[0].back() == ':') {
                 label = lineVec[0].substr(0, lineVec[0].size()-1);
-                tabSimb[label] = addressCounter;
-                if(lineVec.size() > 1 && lineVec[1] == "EXTERN") lab_extern = label;
-                lineVec.erase(lineVec.begin());
 
-                //Incrementa extraLabelCounter, verificando se há mais de um rótulo na linha
-                vector<string> aux;
-                for(auto str : lineVec) {
-                    if (str.back() == ':') extraLabelCounter += 1;
-                    else aux.push_back(str);
+                if(lineVec.size() > 1 && lineVec[1] == "EXTERN") {
+                    lineVec[0] = "EXTERN";
+                    lineVec[1] = label;
                 }
 
-                if (extraLabelCounter > 0) {
-                    printf("ERROR: (Erro Sintatico) na linha %d. Mais de um rotulo na mesma linha\n", lineCounter);
+                else {
+                    tabSimb[label] = addressCounter;
 
-                    no_major_errors_flag = false;
+                    lineVec.erase(lineVec.begin());
 
-                    // aux armazena a linha sem labels
-                    lineVec = aux;
+                    //Incrementa extraLabelCounter, verificando se há mais de um rótulo na linha
+                    vector<string> aux;
+                    for(auto str : lineVec) {
+                        if (str.back() == ':') extraLabelCounter += 1;
+                        else aux.push_back(str);
+                    }
+
+                    if (extraLabelCounter > 0) {
+                        printf("ERROR: (Erro Sintatico) na linha %d. Mais de um rotulo na mesma linha\n", lineCounter);
+
+                        no_major_errors_flag = false;
+
+                        // aux armazena a linha sem labels
+                        lineVec = aux;
+                    }
                 }
 
                 //Verifica Erros Léxicos no Rótulo
@@ -351,7 +359,6 @@ bool assemble(string filename) {
                     }
                     mem.push_back(0);
                     fator_offset.push_back(0);
-                    tipoDado.insert({label});
                     addressCounter += 1;
                 }
 
@@ -372,7 +379,6 @@ bool assemble(string filename) {
                     }
                     mem.push_back( stoi(lineVec[1]) );
                     fator_offset.push_back(0);
-                    tipoDado.insert({label});
                     addressCounter += 1;
                 }
 
@@ -393,21 +399,15 @@ bool assemble(string filename) {
                 }
 
                 else if (instruction == "EXTERN") {
-                    if (lineVec.size() < 2 && lab_extern == "") {
+                    if (lineVec.size() < 2) {
                         cout << "ERROR: (Erro Sintatico) na linha " << lineCounter << ". Instrucao EXTERN nao possui argumento"  << endl;
 
                         // faltou label -> criar um label "de erro"
                         no_major_errors_flag = false;
                         lineVec.push_back( "ERRO_FALTA_DE_LABEL_EXTERN" );
                     }
-                    string arg;
-                    if(lab_extern == ""){
-                        arg = lineVec[1];
-                    }
-                    else{
-                        arg = lab_extern;
-                        lab_extern = "";
-                    }
+
+                    string arg = lineVec[1];
                     tabUso[arg] = vector<int>();
                     tabSimb[arg] = -1; // label externo
                     flag_extern = 1;
@@ -477,6 +477,10 @@ bool assemble(string filename) {
                         //Analisador Léxico
                         scanner(arg, lineCounter);
 
+                        // checa se a instrução é do tipo JMP, logo o argumento é do tipo Endereço
+                        if (instruction == "JMP" or instruction == "JMPP" or instruction == "JMPZ" or instruction == "JMPN")
+                            tipoEndereco.insert(arg);
+
                         // caso o vetor de pendencias desse label nao esteja inicializado
                         if (!tabPend.count(arg)) tabPend[arg] = vector<pair<int, int>>();
 
@@ -511,7 +515,7 @@ bool assemble(string filename) {
         for(auto [addressIdx, lineIdx] : vec) {
             // rotulo nunca definido nem internamente (>= 0), nem externamente (== -1)
             if (!tabSimb.count(lab)) {
-                if (tipoDado.count(lab))
+                if (!tipoEndereco.count(lab))
                     printf("ERROR: (Erro Semantico) na linha %d. Rotulo de Dado nao definido.\n", lineIdx);
                 else
                     printf("ERROR: (Erro Semantico) na linha %d. Rotulo de Endereço nao definido.\n", lineIdx);
@@ -538,7 +542,7 @@ bool assemble(string filename) {
     for(auto [lab, lineIdx] : tabDef) {
 
         if (!tabSimb.count(lab)) {
-            if (tipoDado.count(lab))
+            if (!tipoEndereco.count(lab))
                 printf("ERROR: (Erro Semantico) na linha %d. Rotulo de Dado nao definido.\n", lineIdx);
             else
                 printf("ERROR: (Erro Semantico) na linha %d. Rotulo de Endereço nao definido.\n", lineIdx);
