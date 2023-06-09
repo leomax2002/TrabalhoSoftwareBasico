@@ -87,6 +87,7 @@ void preprocess(string filename) {
 
             // removendo comentarios
             auto pos = line.find(";");
+            if (pos == 0) continue; // linha só comentário
             if (pos != string::npos) line = line.substr(0, pos);
 
             // criando um espaço depois de ":" -> ": "
@@ -181,8 +182,7 @@ void preprocess(string filename) {
     vector<string> fileVec2;
 
     if (secTextLine == -1) {
-        // Nao tem SECTION TEXT -> erro sintático? (colocar isso)
-        cout << "WARNING: Faltando SECTION TEXT" << endl;
+        cout << "WARNING: (Erro Semântico) Faltando SECTION TEXT" << endl;
 
         // Talvez de ainda para montar o arquivo, portanto:
         // removendo a linha de SECTION DATA, caso tenha.
@@ -436,6 +436,7 @@ bool assemble(string filename) {
                     // inicializando todos os labels externos com o contador de linha caso precise
                     tabDef[arg] = lineCounter;
                     flag_public = 1;
+
                     if(!flag_begin)
                         printf("WARNING: (Erro Semantico) na linha %d, Uso de PUBLIC sem BEGIN\n", lineCounter);
                 }
@@ -727,9 +728,5 @@ int32_t main(int argc, char** argv) {
             cout << "Arquivo {" << filename << "} foi montado sem erros :-) " << endl;
     }
 
-    // if(argc >= 3) {
-    //     cout << "Mais de um arquivo passado como argumento" << endl;
-    //     cout << "Ligando arquivos..." << endl;
-    //     linker(files);
-    // }
+    cout << endl;
 }
