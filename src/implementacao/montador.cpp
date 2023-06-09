@@ -153,7 +153,7 @@ void preprocess(string filename) {
         }
     }
 
-    // cuidando da diretiva SECTION
+// cuidando da diretiva SECTION
     int secDataLine = -1, secTextLine = -1;
     int file_sz = (int) fileVec.size();
 
@@ -181,38 +181,12 @@ void preprocess(string filename) {
 
     vector<string> fileVec2;
 
-    if (secTextLine == -1) {
-        cout << "WARNING: (Erro Semântico) Faltando SECTION TEXT" << endl;
+    // Tem SECTION DATA e TEXT, invertendo a ordem caso necessario
+    if (secTextLine != -1 and secDataLine != -1) {
 
-        // Talvez de ainda para montar o arquivo, portanto:
-        // removendo a linha de SECTION DATA, caso tenha.
-        for(int i=0; i<file_sz; i++) {
-            if (i == secDataLine) continue;
-            fileVec2.push_back(fileVec[i]);
-        }
-    }
-
-    // Nao tem SECTION DATA -> retirar apenas a linha de SECTION TEXT
-    else if (secDataLine == -1) {
-        // Nao tem SECTION DATA -> WARNING (talvez só ignorar?)
-        cout << "WARNING: Faltando SECTION DATA" << endl;
-
-        // removendo a linha de SECTION TEXT
-        for(int i=0; i<file_sz; i++) {
-            if (i == secTextLine) continue;
-            fileVec2.push_back(fileVec[i]);
-        }
-    }
-
-    // Tem SECTION DATA e TEXT, removendo essas linhas e invertendo a ordem caso necessario
-    else {
-
-        // Text vem antes de Data
+        // TEXT vem antes de DATA
         if (secTextLine < secDataLine) {
-            for(int i=0; i<file_sz; i++) {
-                if (i == secTextLine or i == secDataLine) continue;
-                fileVec2.push_back(fileVec[i]);
-            }
+            fileVec2 = fileVec;
         }
 
         // DATA vem antes de TEXT
@@ -222,13 +196,17 @@ void preprocess(string filename) {
                 fileVec2.push_back(fileVec[i]);
 
             // copiando TEXT
-            for(int i=secTextLine+1; i<file_sz; i++)
+            for(int i=secTextLine; i<file_sz; i++)
                 fileVec2.push_back(fileVec[i]);
 
             // copiando DATA
-            for(int i=secDataLine+1; i<secTextLine; i++)
+            for(int i=secDataLine; i<secTextLine; i++)
                 fileVec2.push_back(fileVec[i]);
         }
+    }
+    // Caso falte algum SECTION
+    else {
+        fileVec2 = fileVec;
     }
 
     for(auto str : fileVec2)
@@ -301,6 +279,10 @@ bool assemble(string filename) {
     bool flag_extern = 0;
     bool flag_public = 0;
 
+    // Flags para verificar se existe SECTION TEXT e SECTION DATA
+    bool flag_text = 0;
+    bool flag_data = 0;
+
     // Mais de um Rotulo na mesma linha
     int extraLabelCounter = 0;
 
@@ -352,6 +334,11 @@ bool assemble(string filename) {
 
                 if (instruction == "SPACE") {
 
+                    if(!flag_data){
+                        printf("WARNING: (Erro Semântico) na linha %d. Sem SECTION DATA\n", lineCounter);
+                        flag_data = 1;
+                    }
+
                     // SPACE possui argumento
                     if(lineVec.size() > 1){
                         int n_args_space = stoi(lineVec[1])-1;
@@ -369,6 +356,11 @@ bool assemble(string filename) {
                 }
 
                 else if (instruction == "CONST") {
+
+                    if(!flag_data){
+                        printf("WARNING: (Erro Semântico) na linha %d. Sem SECTION DATA\n", lineCounter);
+                        flag_data = 1;
+                    }
                     if (lineVec.size() < 2) {
                         cout << "ERROR: (Erro Sintatico) na linha " << lineCounter << ". Instrucao CONST nao possui argumento." << endl;
 
@@ -441,10 +433,25 @@ bool assemble(string filename) {
                         printf("WARNING: (Erro Semantico) na linha %d, Uso de PUBLIC sem BEGIN\n", lineCounter);
                 }
 
+                else if(instruction == "SECTION"){
+                    cout << "SECTION";
+                    if(lineVec[1] == "TEXT"){
+                        flag_text = 1;
+                    }
+                    if(lineVec[1] == "DATA"){
+                        flag_data = 1;
+                    }
+                }
+
             }
 
             // É uma instrução do assembly
             else {
+
+                  if(!flag_text){
+                        printf("ERROR: (Erro Semântico) na linha %d. Sem SECTION TEXT\n", lineCounter);
+                        flag_text = 1;
+                    }
                 // coloca o opcode na memória
                 mem.push_back(tabInstr[instruction].first);
                 fator_offset.push_back(0);
