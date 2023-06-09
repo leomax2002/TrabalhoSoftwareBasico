@@ -92,7 +92,7 @@ void linker(vector<string> objs){
                         cod_ligado.push_back(id);
                         contador_pos_cod++;
                     }
-                    fator_correcao = (int) lineVec.size();
+                    fator_correcao+= (int) lineVec.size();
             }
 
             }

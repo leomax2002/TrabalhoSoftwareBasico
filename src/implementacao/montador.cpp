@@ -276,15 +276,15 @@ bool assemble(string filename) {
     tabDef.clear();
 
     vector<int> mem;
-    
+
     //Fator de Offset para Argumentos do tipo X+2
     vector<int> fator_offset;
-    
+
     vector<int> relativos;
-    
+
     // se um label é de dado, em vez de endereço
-    set<string> tipoDado; 
-    
+    set<string> tipoDado;
+
     string line;
 
     // Contador do endereço de memória
@@ -313,6 +313,7 @@ bool assemble(string filename) {
             // tokenizando a linha em palavras
             stringstream ss(line);
             string word;
+            string lab_extern = "";
             vector<string> lineVec;
             while(ss >> word) lineVec.push_back(word);
 
@@ -321,6 +322,7 @@ bool assemble(string filename) {
             if (lineVec[0].back() == ':') {
                 label = lineVec[0].substr(0, lineVec[0].size()-1);
                 tabSimb[label] = addressCounter;
+                if(lineVec.size() > 1 && lineVec[1] == "EXTERN") lab_extern = label;
                 lineVec.erase(lineVec.begin());
 
                 //Incrementa extraLabelCounter, verificando se há mais de um rótulo na linha
@@ -332,7 +334,7 @@ bool assemble(string filename) {
 
                 if (extraLabelCounter > 0) {
                     printf("ERROR: (Erro Sintatico) na linha %d. Mais de um rotulo na mesma linha\n", lineCounter);
-                    
+
                     no_major_errors_flag = false;
 
                     // aux armazena a linha sem labels
@@ -350,7 +352,7 @@ bool assemble(string filename) {
 
                 if (instruction == "SPACE") {
 
-                    // SPACE possui argumento 
+                    // SPACE possui argumento
                     if(lineVec.size() > 1){
                         int n_args_space = stoi(lineVec[1])-1;
                         for(int j = 0; j < n_args_space; j++){
@@ -369,7 +371,7 @@ bool assemble(string filename) {
                 else if (instruction == "CONST") {
                     if (lineVec.size() < 2) {
                         cout << "ERROR: (Erro Sintatico) na linha " << lineCounter << ". Instrucao CONST nao possui argumento." << endl;
-                        
+
                         no_major_errors_flag = false;
                         // considererar então o argumento == 0
                         // lineVec[1] = 0
@@ -398,15 +400,21 @@ bool assemble(string filename) {
                 }
 
                 else if (instruction == "EXTERN") {
-                    if (lineVec.size() < 2) {
+                    if (lineVec.size() < 2 && lab_extern == "") {
                         cout << "ERROR: (Erro Sintatico) na linha " << lineCounter << ". Instrucao EXTERN nao possui argumento"  << endl;
 
                         // faltou label -> criar um label "de erro"
                         no_major_errors_flag = false;
                         lineVec.push_back( "ERRO_FALTA_DE_LABEL_EXTERN" );
                     }
-
-                    string arg = lineVec[1];
+                    string arg;
+                    if(lab_extern == ""){
+                        arg = lineVec[1];
+                    }
+                    else{
+                        arg = lab_extern;
+                        lab_extern = "";
+                    }
                     tabUso[arg] = vector<int>();
                     tabSimb[arg] = -1; // label externo
                     flag_extern = 1;
@@ -418,7 +426,7 @@ bool assemble(string filename) {
                 else if (instruction == "PUBLIC") {
                     if (lineVec.size() < 2) {
                         cout << "ERROR: (Erro Sintatico) na linha " << lineCounter << ". Instrucao PUBLIC nao possui argumento"  << endl;
-                        
+
                         // faltou label
                         no_major_errors_flag = false;
                         lineVec.push_back( "ERRO_FALTA_DE_LABEL_PUBLIC" );
@@ -496,7 +504,7 @@ bool assemble(string filename) {
                     printf("ERROR: (Erro Semantico) na linha %d. Rotulo de Dado nao definido.\n", lineIdx);
                 else
                     printf("ERROR: (Erro Semantico) na linha %d. Rotulo de Endereço nao definido.\n", lineIdx);
-                
+
                 no_major_errors_flag = false;
                 // gerar o valor de 0 então para esse rótulo para poder compilar
                 tabSimb[lab] = 0;
@@ -523,7 +531,7 @@ bool assemble(string filename) {
                 printf("ERROR: (Erro Semantico) na linha %d. Rotulo de Dado nao definido.\n", lineIdx);
             else
                 printf("ERROR: (Erro Semantico) na linha %d. Rotulo de Endereço nao definido.\n", lineIdx);
-            
+
             no_major_errors_flag = false;
             // gerar o valor de 0 então para esse rótulo para poder compilar
             tabSimb[lab] = 0;
@@ -715,7 +723,7 @@ int32_t main(int argc, char** argv) {
 
         if ( !assemble(filename) )
             cout << "Arquivo {" << filename << "} foi montado com erros :-( " << endl;
-        else 
+        else
             cout << "Arquivo {" << filename << "} foi montado sem erros :-) " << endl;
     }
 
