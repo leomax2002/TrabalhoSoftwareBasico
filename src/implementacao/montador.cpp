@@ -222,12 +222,12 @@ void scanner(string token, int lineCounter){
     for(int i=0; i<sz; i++) {
         // verifica se o primeiro caractere é um número (proibido)
         if ( i == 0 and isdigit(token[i])) {
-            cout << "ERROR: Erro Lexico no token {" << token << "} da linha: " << lineCounter << endl;
+            cout << "ERROR: (Erro Lexico) no token {" << token << "} da linha: " << lineCounter << endl;
             return;
         }
         // verifica se todos os caracteres são apenas: letras, underscores ou números
         if ( !(isalpha(token[i]) or isdigit(token[i]) or token[i] == '_') ) {
-            cout << "ERROR: Erro Lexico no token {" << token << "} da linha: " << lineCounter << endl;
+            cout << "ERROR: (Erro Lexico) no token {" << token << "} da linha: " << lineCounter << endl;
             return;
         }
     }
